@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  role      String   @default("USER")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  rateCards RateCard[]
+  
+  @@map("users")
+}
+
+model RateCard {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  items RateCardItem[]
+  
+  @@map("rate_cards")
+}
+
+model RateCardItem {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  basePrice   Float
+  unit        String  @default("each")
+  category    String?
+  pricingType String  @default("FIXED")
+  
+  rateCardId String
+  rateCard   RateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+  
+  tiers PricingTier[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("rate_card_items")
+}
+
+model PricingTier {
+  id        String  @id @default(cuid())
+  minQty    Int     @default(1)
+  maxQty    Int?
+  price     Float
+  discount  Float   @default(0)
+  
+  itemId String
+  item   RateCardItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  
+  @@map("pricing_tiers")
+}
+
