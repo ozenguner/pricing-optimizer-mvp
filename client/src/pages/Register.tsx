@@ -6,8 +6,7 @@ import { z } from 'zod'
 import { authService } from '../services/auth'
 
 const registerSchema = z.object({
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
+  name: z.string().min(1, 'Name is required'),
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters long')
     .regex(/(?=.*[a-z])/, 'Password must contain at least one lowercase letter')
@@ -74,36 +73,19 @@ export function Register() {
           )}
           
           <div className="space-y-4">
-            <div className="flex space-x-4">
-              <div className="flex-1">
-                <label htmlFor="firstName" className="form-label">
-                  First Name
-                </label>
-                <input
-                  {...register('firstName')}
-                  type="text"
-                  className="form-input"
-                  placeholder="First name"
-                />
-                {errors.firstName && (
-                  <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
-                )}
-              </div>
-              
-              <div className="flex-1">
-                <label htmlFor="lastName" className="form-label">
-                  Last Name
-                </label>
-                <input
-                  {...register('lastName')}
-                  type="text"
-                  className="form-input"
-                  placeholder="Last name"
-                />
-                {errors.lastName && (
-                  <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
-                )}
-              </div>
+            <div>
+              <label htmlFor="name" className="form-label">
+                Full Name
+              </label>
+              <input
+                {...register('name')}
+                type="text"
+                className="form-input"
+                placeholder="Enter your full name"
+              />
+              {errors.name && (
+                <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+              )}
             </div>
             
             <div>

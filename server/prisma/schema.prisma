@@ -8,67 +8,45 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid())
   email     String   @unique
   password  String
-  firstName String
-  lastName  String
-  role      String   @default("USER")
+  name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
+  folders   Folder[]
   rateCards RateCard[]
+}
+
+model Folder {
+  id        String   @id @default(uuid())
+  name      String
+  parentId  String?
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   
-  @@map("users")
+  user      User       @relation(fields: [userId], references: [id])
+  parent    Folder?    @relation("FolderHierarchy", fields: [parentId], references: [id])
+  children  Folder[]   @relation("FolderHierarchy")
+  rateCards RateCard[]
 }
 
 model RateCard {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  isActive    Boolean  @default(true)
-  isPublic    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  pricingModel String   // 'tiered' | 'seat-based' | 'flat-rate' | 'cost-plus' | 'subscription'
+  data         String   // Flexible JSON for different pricing structures
+  isActive     Boolean  @default(true)
+  shareToken   String?  @unique // For external sharing
+  folderId     String?
+  userId       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  items RateCardItem[]
-  
-  @@map("rate_cards")
-}
-
-model RateCardItem {
-  id          String  @id @default(cuid())
-  name        String
-  description String?
-  basePrice   Float
-  unit        String  @default("each")
-  category    String?
-  pricingType String  @default("FIXED")
-  
-  rateCardId String
-  rateCard   RateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
-  
-  tiers PricingTier[]
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  @@map("rate_card_items")
-}
-
-model PricingTier {
-  id        String  @id @default(cuid())
-  minQty    Int     @default(1)
-  maxQty    Int?
-  price     Float
-  discount  Float   @default(0)
-  
-  itemId String
-  item   RateCardItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  
-  @@map("pricing_tiers")
+  user   User    @relation(fields: [userId], references: [id])
+  folder Folder? @relation(fields: [folderId], references: [id])
 }
 

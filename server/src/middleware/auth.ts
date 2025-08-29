@@ -6,7 +6,6 @@ export interface AuthRequest extends Request {
   user?: {
     id: string
     email: string
-    role: string
   }
 }
 
@@ -26,12 +25,11 @@ export const authenticateToken = async (
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
       userId: string
       email: string
-      role: string
     }
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, email: true, role: true }
+      select: { id: true, email: true }
     })
 
     if (!user) {
@@ -40,8 +38,7 @@ export const authenticateToken = async (
 
     req.user = {
       id: user.id,
-      email: user.email,
-      role: user.role
+      email: user.email
     }
 
     next()
@@ -50,13 +47,3 @@ export const authenticateToken = async (
   }
 }
 
-export const requireAdmin = (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-) => {
-  if (req.user?.role !== 'ADMIN') {
-    return res.status(403).json({ error: 'Admin access required' })
-  }
-  next()
-}

@@ -1,11 +1,12 @@
 export interface User {
   id: string
   email: string
-  firstName: string
-  lastName: string
-  role: 'USER' | 'ADMIN'
+  password: string
+  name: string
   createdAt: string
-  updatedAt?: string
+  updatedAt: string
+  folders: Folder[]
+  rateCards: RateCard[]
 }
 
 export interface AuthResponse {
@@ -14,55 +15,49 @@ export interface AuthResponse {
   token: string
 }
 
+export interface Folder {
+  id: string
+  name: string
+  parentId?: string
+  userId: string
+  createdAt: string
+  updatedAt: string
+  user: User
+  parent?: Folder
+  children: Folder[]
+  rateCards: RateCard[]
+}
+
 export interface RateCard {
   id: string
   name: string
   description?: string
+  pricingModel: 'tiered' | 'seat-based' | 'flat-rate' | 'cost-plus' | 'subscription'
+  data: string // JSON string for flexible pricing structures
   isActive: boolean
-  isPublic: boolean
+  shareToken?: string
+  folderId?: string
   userId: string
-  items: RateCardItem[]
   createdAt: string
   updatedAt: string
+  user: User
+  folder?: Folder
 }
 
-export interface RateCardItem {
-  id: string
-  name: string
-  description?: string
-  basePrice: number
-  unit: string
-  category?: string
-  pricingType: 'FIXED' | 'TIERED' | 'VOLUME' | 'PERCENTAGE'
-  tiers: PricingTier[]
-  rateCardId: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface PricingTier {
-  id: string
-  minQty: number
-  maxQty?: number
-  price: number
-  discount: number
-  itemId: string
+// Utility type for parsed pricing data
+export interface PricingData {
+  [key: string]: any
 }
 
 export interface CalculationRequest {
-  items: {
-    itemId: string
-    quantity: number
-  }[]
   rateCardId: string
+  quantity?: number
+  parameters?: Record<string, any>
 }
 
 export interface CalculationResult {
-  itemId: string
-  itemName: string
-  quantity: number
-  unitPrice: number
+  rateCardId: string
   totalPrice: number
-  appliedTier?: PricingTier
-  discount: number
+  breakdown: Record<string, any>
+  appliedModel: string
 }

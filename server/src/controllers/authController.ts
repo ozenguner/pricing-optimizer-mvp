@@ -16,7 +16,7 @@ export const register = async (req: Request, res: Response) => {
       return res.status(400).json({ errors: errors.array() })
     }
 
-    const { email, password, firstName, lastName } = req.body
+    const { email, password, name } = req.body
 
     if (!validateEmail(email)) {
       return res.status(400).json({ error: 'Invalid email format' })
@@ -44,23 +44,19 @@ export const register = async (req: Request, res: Response) => {
       data: {
         email,
         password: hashedPassword,
-        firstName,
-        lastName
+        name
       },
       select: {
         id: true,
         email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
+        name: true,
         createdAt: true
       }
     })
 
     const token = generateToken({
       userId: user.id,
-      email: user.email,
-      role: user.role
+      email: user.email
     })
 
     res.status(201).json({
@@ -99,8 +95,7 @@ export const login = async (req: Request, res: Response) => {
 
     const token = generateToken({
       userId: user.id,
-      email: user.email,
-      role: user.role
+      email: user.email
     })
 
     res.json({
@@ -108,9 +103,7 @@ export const login = async (req: Request, res: Response) => {
       user: {
         id: user.id,
         email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role
+        name: user.name
       },
       token
     })
@@ -127,9 +120,7 @@ export const getProfile = async (req: Request & { user?: any }, res: Response) =
       select: {
         id: true,
         email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
+        name: true,
         createdAt: true,
         updatedAt: true
       }

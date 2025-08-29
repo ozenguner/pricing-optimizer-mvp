@@ -8,8 +8,7 @@ const router = Router()
 router.post('/register', [
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 8 }),
-  body('firstName').trim().isLength({ min: 1 }),
-  body('lastName').trim().isLength({ min: 1 })
+  body('name').trim().isLength({ min: 1 })
 ], register)
 
 router.post('/login', [
