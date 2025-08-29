@@ -6,7 +6,14 @@
       "Bash(npx prisma generate:*)",
       "Bash(npx prisma:*)",
       "Bash(timeout 10 npm run dev)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npm run dev:*)",
+      "Bash(taskkill:*)",
+      "Bash(npm install:*)",
+      "Bash(PORT=5001 npm run dev)",
+      "Bash(PORT=5005 npm run dev)",
+      "Bash(del:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

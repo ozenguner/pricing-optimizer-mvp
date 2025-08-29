@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.js'
 import rateCardRoutes from './routes/rateCards.js'
 import calculatorRoutes from './routes/calculator.js'
 import folderRoutes from './routes/folders.js'
+import importExportRoutes from './routes/importExport.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { authenticateToken } from './middleware/auth.js'
 
@@ -42,6 +43,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/rate-cards', rateCardRoutes)
 app.use('/api/folders', folderRoutes)
+app.use('/api/import-export', importExportRoutes)
 app.use('/api/calculator', authenticateToken, calculatorRoutes)
 
 app.use(errorHandler)
