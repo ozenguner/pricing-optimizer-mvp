@@ -32,8 +32,8 @@ export interface RateCard {
   id: string
   name: string
   description?: string
-  pricingModel: 'tiered' | 'seat-based' | 'flat-rate' | 'cost-plus' | 'subscription'
-  data: string // JSON string for flexible pricing structures
+  pricingModel: PricingModel
+  data: PricingData
   isActive: boolean
   shareToken?: string
   folderId?: string
@@ -44,10 +44,44 @@ export interface RateCard {
   folder?: Folder
 }
 
-// Utility type for parsed pricing data
-export interface PricingData {
-  [key: string]: any
+export type PricingModel = 'tiered' | 'seat-based' | 'flat-rate' | 'cost-plus' | 'subscription'
+
+// Different data structures for each pricing model
+export interface TieredPricing {
+  tiers: Array<{
+    min: number
+    max: number | null
+    pricePerUnit: number
+  }>
 }
+
+export interface SeatBasedPricing {
+  pricePerSeat: number
+  minimumSeats?: number
+  volumeDiscounts?: Array<{
+    minSeats: number
+    discountPercent: number
+  }>
+}
+
+export interface FlatRatePricing {
+  price: number
+  billingPeriod?: 'one-time' | 'monthly' | 'yearly'
+}
+
+export interface CostPlusPricing {
+  baseCost: number
+  markupPercent: number
+}
+
+export interface SubscriptionPricing {
+  monthlyPrice: number
+  yearlyPrice?: number
+  setupFee?: number
+  features?: string[]
+}
+
+export type PricingData = TieredPricing | SeatBasedPricing | FlatRatePricing | CostPlusPricing | SubscriptionPricing
 
 export interface CalculationRequest {
   rateCardId: string
