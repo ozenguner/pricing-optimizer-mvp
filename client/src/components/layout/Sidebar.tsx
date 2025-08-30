@@ -5,6 +5,7 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: '📊' },
   { name: 'Rate Cards', href: '/rate-cards', icon: '📋' },
   { name: 'Calculator', href: '/calculator', icon: '🧮' },
+  { name: 'Import/Export', href: '/import-export', icon: '📁' },
 ]
 
 export function Sidebar() {

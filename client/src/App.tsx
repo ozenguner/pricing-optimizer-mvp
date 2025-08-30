@@ -2,7 +2,9 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
 import { Dashboard } from './pages/Dashboard'
 import { RateCards } from './pages/RateCards'
+import { RateCardEditor } from './pages/RateCardEditor'
 import { Calculator } from './pages/Calculator'
+import { ImportExport } from './pages/ImportExport'
 import { Login } from './pages/Login'
 import { Register } from './pages/Register'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
@@ -21,7 +23,11 @@ function App() {
           }>
             <Route index element={<Dashboard />} />
             <Route path="rate-cards" element={<RateCards />} />
+            <Route path="rate-cards/create" element={<RateCardEditor />} />
+            <Route path="rate-cards/:id" element={<RateCards />} />
+            <Route path="rate-cards/:id/edit" element={<RateCardEditor />} />
             <Route path="calculator" element={<Calculator />} />
+            <Route path="import-export" element={<ImportExport />} />
           </Route>
         </Routes>
       </div>
