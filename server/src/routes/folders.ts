@@ -76,6 +76,9 @@ router.get('/:id/path', [
   param('id').isUUID().withMessage('Invalid folder ID')
 ], getFolderPath)
 
-router.post('/move-rate-card', moveRateCardValidation, moveRateCard)
+router.post('/:id/move', [
+  param('id').isUUID().withMessage('Invalid folder ID'),
+  body('rateCardId').isUUID().withMessage('Invalid rate card ID')
+], moveRateCard)
 
 export default router

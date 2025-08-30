@@ -6,9 +6,9 @@ import {
   getRateCard,
   updateRateCard,
   deleteRateCard,
+  duplicateRateCard,
   generateShareToken,
-  revokeShareToken,
-  getPublicRateCard
+  revokeShareToken
 } from '../controllers/rateCardController.js'
 import { authenticateToken } from '../middleware/auth.js'
 
@@ -52,6 +52,13 @@ router.delete('/:id', authenticateToken, [
   param('id').isUUID().withMessage('Invalid rate card ID')
 ], deleteRateCard)
 
+// Duplicate rate card
+router.post('/:id/duplicate', authenticateToken, [
+  param('id').isUUID().withMessage('Invalid rate card ID'),
+  body('name').optional().trim().isLength({ min: 1, max: 100 }).withMessage('Name must be 1-100 characters'),
+  body('folderId').optional().isUUID().withMessage('Invalid folder ID')
+], duplicateRateCard)
+
 // Share token management
 router.post('/:id/share', authenticateToken, [
   param('id').isUUID().withMessage('Invalid rate card ID')
@@ -60,10 +67,5 @@ router.post('/:id/share', authenticateToken, [
 router.delete('/:id/share', authenticateToken, [
   param('id').isUUID().withMessage('Invalid rate card ID')
 ], revokeShareToken)
-
-// Public route (no authentication required)
-router.get('/shared/:shareToken', [
-  param('shareToken').isUUID().withMessage('Invalid share token')
-], getPublicRateCard)
 
 export default router

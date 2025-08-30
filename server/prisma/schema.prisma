@@ -15,8 +15,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
-  folders   Folder[]
-  rateCards RateCard[]
+  folders      Folder[]
+  rateCards    RateCard[]
+  securityLogs SecurityLog[]
+  
+  // Performance indexes for common queries
+  @@index([createdAt])
+  @@index([email, createdAt])
 }
 
 model Folder {
@@ -31,6 +36,13 @@ model Folder {
   parent    Folder?    @relation("FolderHierarchy", fields: [parentId], references: [id])
   children  Folder[]   @relation("FolderHierarchy")
   rateCards RateCard[]
+  
+  // Performance indexes for folder operations
+  @@index([userId])
+  @@index([userId, parentId])
+  @@index([parentId])
+  @@index([userId, name])
+  @@index([userId, createdAt])
 }
 
 model RateCard {
@@ -48,5 +60,36 @@ model RateCard {
   
   user   User    @relation(fields: [userId], references: [id])
   folder Folder? @relation(fields: [folderId], references: [id])
+  
+  // Performance indexes for rate card queries
+  @@index([userId])
+  @@index([userId, isActive])
+  @@index([userId, folderId])
+  @@index([folderId])
+  @@index([shareToken])
+  @@index([userId, updatedAt])
+  @@index([userId, name])
+  @@index([userId, pricingModel])
+  @@index([isActive, createdAt])
+}
+
+model SecurityLog {
+  id          String   @id @default(uuid())
+  eventType   String   // SecurityEventType enum values
+  userId      String?
+  email       String?
+  ipAddress   String
+  userAgent   String
+  details     String?  // JSON string for additional event details
+  timestamp   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([eventType])
+  @@index([userId])
+  @@index([ipAddress])
+  @@index([timestamp])
+  @@index([eventType, timestamp])
 }
 

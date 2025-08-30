@@ -8,6 +8,7 @@ import {
   validateEmail,
   validatePassword
 } from '../utils/auth.js'
+import { logSecurityEvent, SecurityEventType } from '../middleware/securityLogger.js'
 
 export const register = async (req: Request, res: Response) => {
   try {
@@ -84,14 +85,47 @@ export const login = async (req: Request, res: Response) => {
     })
 
     if (!user) {
+      // Log failed login attempt
+      await logSecurityEvent({
+        type: SecurityEventType.LOGIN_FAILURE,
+        email,
+        ipAddress: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+                   req.connection.remoteAddress || 'unknown',
+        userAgent: req.get('User-Agent') || 'unknown',
+        details: { reason: 'User not found' },
+        timestamp: new Date()
+      })
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
     const isValidPassword = await comparePassword(password, user.password)
 
     if (!isValidPassword) {
+      // Log failed login attempt
+      await logSecurityEvent({
+        type: SecurityEventType.LOGIN_FAILURE,
+        userId: user.id,
+        email,
+        ipAddress: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+                   req.connection.remoteAddress || 'unknown',
+        userAgent: req.get('User-Agent') || 'unknown',
+        details: { reason: 'Invalid password' },
+        timestamp: new Date()
+      })
       return res.status(401).json({ error: 'Invalid credentials' })
     }
+
+    // Log successful login
+    await logSecurityEvent({
+      type: SecurityEventType.LOGIN_SUCCESS,
+      userId: user.id,
+      email,
+      ipAddress: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+                 req.connection.remoteAddress || 'unknown',
+      userAgent: req.get('User-Agent') || 'unknown',
+      details: { loginMethod: 'email_password' },
+      timestamp: new Date()
+    })
 
     const token = generateToken({
       userId: user.id,
@@ -109,6 +143,18 @@ export const login = async (req: Request, res: Response) => {
     })
   } catch (error) {
     console.error('Login error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+}
+
+export const logout = async (req: Request, res: Response) => {
+  try {
+    // In a stateless JWT setup, logout is typically handled client-side
+    // by removing the token. For enhanced security, you could implement
+    // token blacklisting here if needed.
+    res.json({ message: 'Logged out successfully' })
+  } catch (error) {
+    console.error('Logout error:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 }

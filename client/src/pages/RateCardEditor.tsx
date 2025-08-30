@@ -845,4 +845,4 @@ function PricingPreview({ pricingModel, data, calculatePreview }: PricingPreview
       )}
     </div>
   )
-}
+}export default RateCardEditor

@@ -2,23 +2,34 @@ import { useState, useEffect, useCallback } from 'react'
 import { rateCardService } from '../services/rateCards'
 import type { RateCard, CreateRateCardRequest, UpdateRateCardRequest } from '../services/rateCards'
 
-export const useRateCards = (folderId?: string) => {
+export const useRateCards = (folderId?: string, page: number = 1, limit: number = 20) => {
   const [rateCards, setRateCards] = useState<RateCard[]>([])
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalCount: 0,
+    pageSize: 20,
+    hasNext: false,
+    hasPrev: false
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const fetchRateCards = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await rateCardService.getAll(folderId)
+      const response = await rateCardService.getAll(folderId, page, limit)
       setRateCards(response.rateCards)
+      if (response.pagination) {
+        setPagination(response.pagination)
+      }
       setError(null)
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch rate cards')
     } finally {
       setLoading(false)
     }
-  }, [folderId])
+  }, [folderId, page, limit])
 
   const createRateCard = useCallback(async (data: CreateRateCardRequest) => {
     try {
@@ -74,6 +85,7 @@ export const useRateCards = (folderId?: string) => {
 
   return {
     rateCards,
+    pagination,
     loading,
     error,
     fetchRateCards,

@@ -12,7 +12,7 @@ import type { PricingModel, RateCard } from '../../client/src/types/index.js'
 
 export const downloadTemplate = async (req: AuthRequest, res: Response) => {
   try {
-    const { pricingModel } = req.params
+    const { model: pricingModel } = req.params
     
     if (!CSV_TEMPLATES[pricingModel as PricingModel]) {
       return res.status(400).json({ error: 'Invalid pricing model' })
@@ -222,77 +222,32 @@ export const importRateCards = async (req: AuthRequest, res: Response) => {
 
 export const exportRateCards = async (req: AuthRequest, res: Response) => {
   try {
-    const { folderId, pricingModel, format = 'csv' } = req.query
+    const { id } = req.params
     const userId = req.user!.id
     
-    if (format !== 'csv') {
-      return res.status(400).json({ error: 'Only CSV format is supported' })
-    }
-    
-    // Build query filters
-    const where: any = { userId }
-    if (folderId === 'null') {
-      where.folderId = null
-    } else if (folderId) {
-      where.folderId = folderId as string
-    }
-    
-    if (pricingModel) {
-      where.pricingModel = pricingModel as string
-    }
-    
-    const rateCards = await prisma.rateCard.findMany({
-      where,
+    // Get the specific rate card
+    const rateCard = await prisma.rateCard.findFirst({
+      where: { id, userId },
       include: {
         folder: {
           select: { id: true, name: true }
         }
-      },
-      orderBy: { name: 'asc' }
+      }
     })
     
-    if (rateCards.length === 0) {
-      return res.status(404).json({ error: 'No rate cards found matching criteria' })
+    if (!rateCard) {
+      return res.status(404).json({ error: 'Rate card not found' })
     }
     
-    // Group by pricing model
-    const groupedCards = rateCards.reduce((acc, card) => {
-      if (!acc[card.pricingModel]) {
-        acc[card.pricingModel] = []
-      }
-      acc[card.pricingModel].push(card)
-      return acc
-    }, {} as Record<string, typeof rateCards>)
+    const csvContent = generateExportCSV([rateCard], rateCard.pricingModel as PricingModel)
+    const filename = `${rateCard.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`
     
-    // If single pricing model, export as single file
-    if (Object.keys(groupedCards).length === 1) {
-      const model = Object.keys(groupedCards)[0] as PricingModel
-      const cards = groupedCards[model]
-      const csvContent = generateExportCSV(cards, model)
-      
-      const filename = `rate_cards_${model}_${new Date().toISOString().split('T')[0]}.csv`
-      
-      res.setHeader('Content-Type', 'text/csv')
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
-      res.send(csvContent)
-    } else {
-      // Multiple pricing models - create zip file would be ideal, but for now return JSON with multiple CSV contents
-      const exports: Record<string, string> = {}
-      
-      for (const [model, cards] of Object.entries(groupedCards)) {
-        exports[model] = generateExportCSV(cards, model as PricingModel)
-      }
-      
-      res.json({
-        success: true,
-        message: 'Multiple pricing models found',
-        exports,
-        suggestion: 'Filter by pricing model for single CSV download'
-      })
-    }
+    res.setHeader('Content-Type', 'text/csv')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.send(csvContent)
   } catch (error) {
-    console.error('Export rate cards error:', error)
-    res.status(500).json({ error: 'Failed to export rate cards' })
+    console.error('Export rate card error:', error)
+    res.status(500).json({ error: 'Failed to export rate card' })
   }
 }
 

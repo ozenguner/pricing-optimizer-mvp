@@ -10,8 +10,11 @@ import rateCardRoutes from './routes/rateCards.js'
 import calculatorRoutes from './routes/calculator.js'
 import folderRoutes from './routes/folders.js'
 import importExportRoutes from './routes/importExport.js'
+import publicRoutes from './routes/public.js'
+import dashboardRoutes from './routes/dashboard.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { authenticateToken } from './middleware/auth.js'
+import { rateLimitLogger } from './middleware/securityLogger.js'
 
 dotenv.config()
 
@@ -20,13 +23,63 @@ const PORT = process.env.PORT || 5000
 
 export const prisma = new PrismaClient()
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100
+// General rate limiter for all endpoints
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per IP per 15 minutes
+  message: {
+    error: 'Too many requests from this IP, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
 })
 
-app.use(helmet())
-app.use(limiter)
+// Strict rate limiter for authentication endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 authentication attempts per IP per 15 minutes
+  message: {
+    error: 'Too many authentication attempts, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Skip successful requests
+  skipSuccessfulRequests: true
+})
+
+// Moderate rate limiter for sensitive operations
+const sensitiveOperationsLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 20, // 20 requests per IP per 10 minutes
+  message: {
+    error: 'Too many requests for sensitive operations, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+})
+
+app.use(helmet({
+  // Enhanced security headers
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
+}))
+
+// Apply security logging for rate limits
+app.use(rateLimitLogger)
+
+// Apply general rate limiting to all requests
+app.use(generalLimiter)
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? process.env.CLIENT_URL 
@@ -40,11 +93,19 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() })
 })
 
-app.use('/api/auth', authRoutes)
-app.use('/api/rate-cards', rateCardRoutes)
-app.use('/api/folders', folderRoutes)
-app.use('/api/import-export', importExportRoutes)
+// Apply strict rate limiting to authentication endpoints
+app.use('/api/auth', authLimiter, authRoutes)
+app.use('/api/rate-cards', authenticateToken, rateCardRoutes)
+app.use('/api/folders', authenticateToken, folderRoutes)
+// Apply moderate rate limiting to sensitive operations
+app.use('/api/import', authenticateToken, sensitiveOperationsLimiter, importExportRoutes)
+app.use('/api/export', authenticateToken, sensitiveOperationsLimiter, importExportRoutes)
+app.use('/api/templates', authenticateToken, importExportRoutes)
 app.use('/api/calculator', authenticateToken, calculatorRoutes)
+app.use('/api/dashboard', authenticateToken, dashboardRoutes)
+
+// Public share route (no authentication required)
+app.use('/api/share', publicRoutes)
 
 app.use(errorHandler)
 

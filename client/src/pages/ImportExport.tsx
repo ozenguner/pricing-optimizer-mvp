@@ -316,3 +316,5 @@ export function ImportExport() {
     </div>
   )
 }
+
+export default ImportExport

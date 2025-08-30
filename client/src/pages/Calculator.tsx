@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { rateCardService } from '../services/rateCards'
+import { formatCurrency, formatNumber } from '../utils/formatting'
+import { extractErrorMessage, ErrorMessages } from '../utils/errorHandling'
 import type { RateCard, PricingModel, TieredPricing, SeatBasedPricing, FlatRatePricing, CostPlusPricing, SubscriptionPricing } from '../types'
 
 interface CalculationInput {
@@ -21,7 +23,7 @@ export function Calculator() {
   const [selectedRateCard, setSelectedRateCard] = useState<RateCard | null>(null)
   const [quantity, setQuantity] = useState<number>(1)
   const [customParameters, setCustomParameters] = useState<Record<string, any>>({})
-  const [calculationResult, setCalculationResult] = useState<CalculationResult | null>(null)
+  const [savedCalculationResult, setSavedCalculationResult] = useState<CalculationResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [calculating, setCalculating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,8 +34,8 @@ export function Calculator() {
       try {
         const response = await rateCardService.getAll()
         setRateCards(response.rateCards.filter(rc => rc.isActive))
-      } catch (err) {
-        setError('Failed to load rate cards')
+      } catch (error) {
+        setError(extractErrorMessage(error) || ErrorMessages.GENERIC_ERROR)
       } finally {
         setLoading(false)
       }
@@ -46,7 +48,7 @@ export function Calculator() {
     try {
       switch (rateCard.pricingModel) {
         case 'tiered':
-          return calculateTieredPrice(rateCard.data as TieredPricing, quantity)
+          return calculateTieredPricing(rateCard.data as TieredPricing, quantity)
         case 'seat-based':
           return calculateSeatBasedPrice(rateCard.data as SeatBasedPricing, quantity)
         case 'flat-rate':
@@ -63,45 +65,77 @@ export function Calculator() {
     }
   }
 
-  const calculateTieredPrice = (data: TieredPricing, quantity: number) => {
-    if (!data.tiers || data.tiers.length === 0) {
-      return { totalPrice: 0, breakdown: { error: 'No tiers configured' } }
+  /**
+   * Calculates pricing using tiered model where different quantities have different prices
+   * 
+   * Business Logic:
+   * - Tiers define quantity ranges (min-max) with specific pricing per unit
+   * - Customer pays different rates for units falling into different tiers
+   * - Example: 1-100 units = $10/unit, 101-500 units = $8/unit, 501+ = $6/unit
+   * - Total calculation distributes quantity across applicable tiers
+   * 
+   * @param tieredPricingData - Configuration with tier definitions and pricing rules
+   * @param requestedQuantity - Total quantity to calculate pricing for
+   * @returns Price breakdown showing cost per tier and total amount
+   */
+  const calculateTieredPricing = (tieredPricingData: TieredPricing, requestedQuantity: number) => {
+    // Validate tier configuration exists
+    if (!tieredPricingData.tiers || tieredPricingData.tiers.length === 0) {
+      return { totalPrice: 0, breakdown: { error: 'No pricing tiers configured' } }
     }
     
-    let totalPrice = 0
-    let remaining = quantity
-    const tierBreakdown: Array<{ tier: number; quantity: number; pricePerUnit: number; subtotal: number }> = []
+    let totalCalculatedPrice = 0
+    let remainingQuantityToProcess = requestedQuantity
+    const tierPricingBreakdown: Array<{ 
+      tierNumber: number; 
+      quantityInTier: number; 
+      pricePerUnitInTier: number; 
+      tierSubtotal: number 
+    }> = []
 
-    // Sort tiers by min value
-    const sortedTiers = [...data.tiers].sort((a, b) => a.min - b.min)
+    // Sort tiers by minimum quantity to ensure correct tier processing order
+    const tiersOrderedByMinQuantity = [...tieredPricingData.tiers].sort((tierA, tierB) => tierA.min - tierB.min)
 
-    for (let i = 0; i < sortedTiers.length; i++) {
-      const tier = sortedTiers[i]
-      if (remaining <= 0) break
+    // Process each tier to distribute quantity and calculate pricing
+    for (let tierIndex = 0; tierIndex < tiersOrderedByMinQuantity.length; tierIndex++) {
+      const currentTier = tiersOrderedByMinQuantity[tierIndex]
+      
+      // Exit early if no more quantity to process
+      if (remainingQuantityToProcess <= 0) break
 
-      const tierMin = tier.min
-      const tierMax = tier.max || Infinity
-      const tierQuantity = Math.min(remaining, Math.max(0, tierMax - Math.max(tierMin, quantity - remaining) + 1))
+      const tierMinimumQuantity = currentTier.min
+      const tierMaximumQuantity = currentTier.max || Infinity
+      
+      // Calculate how many units fall into this tier
+      const unitsInCurrentTier = Math.min(
+        remainingQuantityToProcess, 
+        Math.max(0, tierMaximumQuantity - Math.max(tierMinimumQuantity, requestedQuantity - remainingQuantityToProcess) + 1)
+      )
 
-      if (tierQuantity > 0 && quantity > tierMin) {
-        const subtotal = tierQuantity * tier.pricePerUnit
-        totalPrice += subtotal
-        tierBreakdown.push({
-          tier: i + 1,
-          quantity: tierQuantity,
-          pricePerUnit: tier.pricePerUnit,
-          subtotal
+      // Only process tier if it has applicable units and meets minimum quantity threshold
+      if (unitsInCurrentTier > 0 && requestedQuantity > tierMinimumQuantity) {
+        const tierSubtotalAmount = unitsInCurrentTier * currentTier.pricePerUnit
+        totalCalculatedPrice += tierSubtotalAmount
+        
+        tierPricingBreakdown.push({
+          tierNumber: tierIndex + 1,
+          quantityInTier: unitsInCurrentTier,
+          pricePerUnitInTier: currentTier.pricePerUnit,
+          tierSubtotal: tierSubtotalAmount
         })
-        remaining -= tierQuantity
+        
+        // Reduce remaining quantity by amount processed in this tier
+        remainingQuantityToProcess -= unitsInCurrentTier
       }
     }
 
     return {
-      totalPrice,
+      totalPrice: totalCalculatedPrice,
       breakdown: {
         model: 'tiered',
-        totalQuantity: quantity,
-        tiers: tierBreakdown
+        totalQuantity: requestedQuantity,
+        tiers: tierPricingBreakdown,
+        effectiveAveragePrice: totalCalculatedPrice / requestedQuantity
       }
     }
   }
@@ -188,30 +222,42 @@ export function Calculator() {
     }
   }
 
-  const handleCalculate = () => {
-    if (!selectedRateCard) return
-
-    setCalculating(true)
-    setError(null)
+  /**
+   * Memoized calculation result to prevent expensive recalculations
+   * Only recalculates when rate card, quantity, or parameters change
+   */
+  const calculationResult = useMemo(() => {
+    if (!selectedRateCard || quantity <= 0) return null
 
     try {
       const result = calculatePrice(selectedRateCard, quantity)
-      const calculationResult: CalculationResult = {
+      return {
         rateCard: selectedRateCard,
         quantity,
         totalPrice: result.totalPrice,
         breakdown: result.breakdown,
         parameters: customParameters
       }
+    } catch (err) {
+      return null
+    }
+  }, [selectedRateCard, quantity, customParameters])
 
-      setCalculationResult(calculationResult)
+  const handleCalculate = useCallback(() => {
+    if (!calculationResult) return
+
+    setCalculating(true)
+    setError(null)
+
+    try {
+      setSavedCalculationResult(calculationResult)
       setCalculationHistory(prev => [calculationResult, ...prev.slice(0, 9)]) // Keep last 10 calculations
     } catch (err) {
       setError('Calculation failed. Please check your inputs.')
     } finally {
       setCalculating(false)
     }
-  }
+  }, [calculationResult])
 
   const handleRateCardChange = (rateCardId: string) => {
     const rateCard = rateCards.find(rc => rc.id === rateCardId)
@@ -575,3 +621,5 @@ export function Calculator() {
     </div>
   )
 }
+
+export default Calculator

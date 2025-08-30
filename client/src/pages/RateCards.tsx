@@ -3,12 +3,15 @@ import { PlusIcon, FolderIcon, DocumentArrowUpIcon, DocumentArrowDownIcon, Ellip
 import { FolderTree } from '../components/folders/FolderTree'
 import { ImportModal, ExportModal } from '../components/import-export'
 import { FolderModal } from '../components/folders/FolderModal'
+import { Pagination } from '../components/ui/Pagination'
 import { useFolders, useRateCards } from '../hooks'
 import type { Folder, PricingModel, RateCard } from '../types'
 import type { ImportResult } from '../services/importExport'
 
 export function RateCards() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showCreateRateCardModal, setShowCreateRateCardModal] = useState(false)
@@ -17,10 +20,20 @@ export function RateCards() {
   const [folderModalData, setFolderModalData] = useState<{ folder?: Folder; parentId?: string | null }>({ parentId: null })
 
   const { folders, loading: foldersLoading, createFolder, updateFolder, deleteFolder, moveRateCard } = useFolders()
-  const { rateCards, loading: rateCardsLoading, fetchRateCards } = useRateCards(selectedFolderId || undefined)
+  const { rateCards, pagination, loading: rateCardsLoading, fetchRateCards } = useRateCards(selectedFolderId || undefined, currentPage, pageSize)
 
   const handleFolderSelect = useCallback((folderId: string | null) => {
     setSelectedFolderId(folderId)
+    setCurrentPage(1) // Reset to first page when changing folders
+  }, [])
+  
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page)
+  }, [])
+  
+  const handlePageSizeChange = useCallback((newPageSize: number) => {
+    setPageSize(newPageSize)
+    setCurrentPage(1) // Reset to first page when changing page size
   }, [])
 
   const handleFolderCreate = useCallback((parentId: string | null) => {
@@ -211,6 +224,23 @@ export function RateCards() {
               </div>
             </div>
           )}
+          
+          {/* Pagination */}
+          {rateCards.length > 0 && pagination.totalPages > 1 && (
+            <Pagination
+              currentPage={pagination.currentPage}
+              totalPages={pagination.totalPages}
+              totalCount={pagination.totalCount}
+              pageSize={pagination.pageSize}
+              hasNext={pagination.hasNext}
+              hasPrev={pagination.hasPrev}
+              onPageChange={handlePageChange}
+              showPageSize={true}
+              onPageSizeChange={handlePageSizeChange}
+              pageSizeOptions={[10, 20, 50]}
+              className="mt-6"
+            />
+          )}
         </div>
       </div>
 
@@ -249,3 +279,5 @@ export function RateCards() {
     </div>
   )
 }
+
+export default RateCards

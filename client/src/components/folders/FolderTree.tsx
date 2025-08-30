@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
 import { ChevronRightIcon, ChevronDownIcon, FolderIcon, FolderOpenIcon } from '@heroicons/react/24/outline'
 import { PlusIcon, EllipsisHorizontalIcon } from '@heroicons/react/24/solid'
 import type { Folder, RateCard } from '../../types'
@@ -29,7 +29,11 @@ interface FolderNodeProps {
   showRateCards?: boolean
 }
 
-const FolderNode: React.FC<FolderNodeProps> = ({
+/**
+ * Memoized FolderNode component to prevent unnecessary re-renders
+ * Only re-renders when props actually change
+ */
+const FolderNode = React.memo<FolderNodeProps>(({
   folder,
   level,
   isSelected,
@@ -250,14 +254,18 @@ interface RateCardNodeProps {
   level: number
 }
 
-const RateCardNode: React.FC<RateCardNodeProps> = ({ rateCard, level }) => {
+/**
+ * Memoized RateCardNode component to prevent unnecessary re-renders
+ * Only re-renders when rateCard or level props change
+ */
+const RateCardNode = React.memo<RateCardNodeProps>(({ rateCard, level }) => {
   const handleDragStart = useCallback((e: React.DragEvent) => {
     e.dataTransfer.setData('text/plain', rateCard.id)
     e.dataTransfer.setData('application/source-type', 'rate-card')
     e.dataTransfer.effectAllowed = 'move'
   }, [rateCard.id])
 
-  const paddingLeft = `${(level + 2) * 1.5}rem`
+  const paddingLeft = React.useMemo(() => `${(level + 2) * 1.5}rem`, [level])
 
   return (
     <div
@@ -282,9 +290,14 @@ const RateCardNode: React.FC<RateCardNodeProps> = ({ rateCard, level }) => {
       )}
     </div>
   )
-}
+})
 
-export const FolderTree: React.FC<FolderTreeProps> = ({
+RateCardNode.displayName = 'RateCardNode'
+
+/**
+ * Main FolderTree component with memoization for tree structure optimization
+ */
+export const FolderTree = React.memo<FolderTreeProps>(({
   folders,
   selectedFolderId,
   onFolderSelect,
@@ -411,4 +424,6 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
       </div>
     </div>
   )
-}
+})
+
+FolderTree.displayName = 'FolderTree'

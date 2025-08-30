@@ -42,12 +42,7 @@ const validateModelValidation = [
   body('data').isObject().withMessage('Data must be an object')
 ]
 
-// Protected routes (require authentication)
-router.post('/calculate', authenticateToken, calculateValidation, calculatePricing)
-router.post('/bulk-calculate', authenticateToken, bulkCalculateValidation, bulkCalculatePricing)
-router.post('/validate', authenticateToken, validateModelValidation, validatePricingModel)
-
-// Public routes (no authentication required)
-router.post('/shared/:shareToken/calculate', publicCalculateValidation, calculatePublicPricing)
+// Main calculate endpoint - POST /api/calculate
+router.post('/', calculateValidation, calculatePricing)
 
 export default router

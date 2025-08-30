@@ -30,34 +30,20 @@ const upload = multer({
   }
 })
 
-// All routes require authentication
-router.use(authenticateToken)
-
-// Download CSV templates
-router.get('/templates/:pricingModel', [
-  param('pricingModel').isIn(['tiered', 'seat-based', 'flat-rate', 'cost-plus', 'subscription']).withMessage('Invalid pricing model')
-], downloadTemplate)
-
-// Preview import (validate without importing)
-router.post('/preview', upload.single('file'), [
-  body('pricingModel').isIn(['tiered', 'seat-based', 'flat-rate', 'cost-plus', 'subscription']).withMessage('Invalid pricing model')
-], previewImport)
-
-// Import rate cards from CSV
-router.post('/import', upload.single('file'), [
+// Import rate cards from CSV - POST /api/import/csv
+router.post('/csv', upload.single('file'), [
   body('pricingModel').isIn(['tiered', 'seat-based', 'flat-rate', 'cost-plus', 'subscription']).withMessage('Invalid pricing model'),
   body('skipDuplicates').optional().isIn(['true', 'false']).withMessage('skipDuplicates must be true or false')
 ], importRateCards)
 
-// Export rate cards to CSV
-router.get('/export', [
-  query('folderId').optional().custom((value) => {
-    if (value === 'null' || value === '' || value === null || value === undefined) return true
-    if (typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return true
-    throw new Error('Invalid folder ID')
-  }),
-  query('pricingModel').optional().isIn(['tiered', 'seat-based', 'flat-rate', 'cost-plus', 'subscription']).withMessage('Invalid pricing model'),
-  query('format').optional().isIn(['csv']).withMessage('Only CSV format is supported')
+// Export rate card to CSV - GET /api/export/csv/:id
+router.get('/csv/:id', [
+  param('id').isUUID().withMessage('Invalid rate card ID')
 ], exportRateCards)
+
+// Download CSV templates - GET /api/templates/:model
+router.get('/:model', [
+  param('model').isIn(['tiered', 'seat-based', 'flat-rate', 'cost-plus', 'subscription']).withMessage('Invalid pricing model')
+], downloadTemplate)
 
 export default router

@@ -26,6 +26,14 @@ export interface RateCardResponse {
 
 export interface RateCardsResponse {
   rateCards: RateCard[]
+  pagination?: {
+    currentPage: number
+    totalPages: number
+    totalCount: number
+    pageSize: number
+    hasNext: boolean
+    hasPrev: boolean
+  }
 }
 
 export const rateCardService = {
@@ -34,8 +42,12 @@ export const rateCardService = {
     return response.data
   },
 
-  async getAll(folderId?: string): Promise<RateCardsResponse> {
-    const params = folderId ? { folderId } : {}
+  async getAll(folderId?: string, page?: number, limit?: number): Promise<RateCardsResponse> {
+    const params: Record<string, any> = {}
+    if (folderId) params.folderId = folderId
+    if (page) params.page = page
+    if (limit) params.limit = limit
+    
     const response = await api.get<RateCardsResponse>('/rate-cards', { params })
     return response.data
   },

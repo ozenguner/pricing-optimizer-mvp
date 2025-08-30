@@ -351,7 +351,8 @@ export const moveRateCard = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ errors: errors.array() })
     }
 
-    const { rateCardId, folderId } = req.body
+    const { id: folderId } = req.params // Target folder ID from URL
+    const { rateCardId } = req.body
     const userId = req.user!.id
 
     // Verify rate card exists and belongs to user
@@ -363,8 +364,8 @@ export const moveRateCard = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Rate card not found' })
     }
 
-    // If moving to a folder, verify it exists and belongs to user
-    if (folderId) {
+    // Verify target folder exists and belongs to user (folderId can be null for root)
+    if (folderId !== 'root') {
       const folder = await prisma.folder.findFirst({
         where: { id: folderId, userId }
       })
@@ -376,7 +377,7 @@ export const moveRateCard = async (req: AuthRequest, res: Response) => {
     // Update rate card folder
     const updatedRateCard = await prisma.rateCard.update({
       where: { id: rateCardId },
-      data: { folderId: folderId || null },
+      data: { folderId: folderId === 'root' ? null : folderId },
       include: {
         folder: {
           select: { id: true, name: true }
@@ -412,22 +413,56 @@ async function isDescendant(ancestorId: string, descendantId: string): Promise<b
   return isDescendant(ancestorId, descendant.parentId)
 }
 
-// Helper function to build folder path for breadcrumbs
+/**
+ * Optimized helper function to build folder path for breadcrumbs
+ * Uses recursive CTE query for better performance instead of N+1 queries
+ * 
+ * Performance Improvement:
+ * - Single query instead of multiple sequential queries
+ * - Uses database-level recursion for better performance
+ * - Reduces network round trips between app and database
+ */
 async function buildFolderPath(folderId: string, userId: string): Promise<Array<{id: string, name: string}>> {
-  const path: Array<{id: string, name: string}> = []
-  let currentId: string | null = folderId
+  // Use raw SQL with recursive CTE for optimal performance
+  const folders = await prisma.$queryRaw<Array<{id: string, name: string, level: number}>>`
+    WITH RECURSIVE folder_path AS (
+      -- Base case: start with the target folder
+      SELECT id, name, parentId, 0 as level
+      FROM Folder 
+      WHERE id = ${folderId} AND userId = ${userId}
+      
+      UNION ALL
+      
+      -- Recursive case: get parent folders
+      SELECT f.id, f.name, f.parentId, fp.level + 1
+      FROM Folder f
+      INNER JOIN folder_path fp ON f.id = fp.parentId
+      WHERE f.userId = ${userId}
+    )
+    SELECT id, name, level FROM folder_path
+    ORDER BY level DESC
+  `
 
-  while (currentId) {
-    const folder = await prisma.folder.findFirst({
-      where: { id: currentId, userId },
-      select: { id: true, name: true, parentId: true }
-    })
+  return folders.map(({ id, name }) => ({ id, name }))
+}
 
-    if (!folder) break
+/**
+ * Cache for folder paths to avoid repeated calculations
+ * In production, consider using Redis for distributed caching
+ */
+const folderPathCache = new Map<string, { path: Array<{id: string, name: string}>, timestamp: number }>()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
-    path.unshift({ id: folder.id, name: folder.name })
-    currentId = folder.parentId
+async function getCachedFolderPath(folderId: string, userId: string): Promise<Array<{id: string, name: string}>> {
+  const cacheKey = `${userId}:${folderId}`
+  const cached = folderPathCache.get(cacheKey)
+  
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.path
   }
-
+  
+  const path = await buildFolderPath(folderId, userId)
+  folderPathCache.set(cacheKey, { path, timestamp: Date.now() })
+  
   return path
 }
