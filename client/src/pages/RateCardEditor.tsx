@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { rateCardService } from '../services/rateCards'
 import { folderService } from '../services/folders'
+import { authService } from '../services/auth'
 import type { RateCard, PricingModel, Folder, TieredPricing, SeatBasedPricing, FlatRatePricing, CostPlusPricing, SubscriptionPricing } from '../types'
 
 // Base schema for all rate cards
@@ -13,7 +14,17 @@ const baseSchema = z.object({
   description: z.string().optional(),
   pricingModel: z.enum(['tiered', 'seat-based', 'flat-rate', 'cost-plus', 'subscription']),
   isActive: z.boolean(),
-  folderId: z.string().optional()
+  folderId: z.string().optional(),
+  sharingPermissions: z.object({
+    type: z.enum(['internal', 'external']),
+    allowedDomains: z.array(z.string()).optional(),
+    permissions: z.object({
+      level: z.enum(['view', 'edit', 'admin']),
+      allowSharing: z.boolean().optional(),
+      allowDownload: z.boolean().optional(),
+      expiresAt: z.string().optional()
+    })
+  })
 })
 
 // Schemas for different pricing models
@@ -79,11 +90,24 @@ export function RateCardEditor() {
       description: '',
       pricingModel: 'tiered',
       isActive: true,
-      folderId: ''
+      folderId: '',
+      sharingPermissions: {
+        type: 'internal',
+        permissions: {
+          level: 'view',
+          allowSharing: false,
+          allowDownload: true
+        }
+      }
     }
   })
 
   const watchedPricingModel = watch('pricingModel')
+  const watchedSharingType = watch('sharingPermissions.type')
+  
+  // Extract user domain from current user's email
+  const currentUser = authService.getStoredUser()
+  const userDomain = currentUser?.email ? currentUser.email.split('@')[1] : ''
 
   useEffect(() => {
     const loadData = async () => {
@@ -103,7 +127,15 @@ export function RateCardEditor() {
             description: rateCard.description || '',
             pricingModel: rateCard.pricingModel,
             isActive: rateCard.isActive,
-            folderId: rateCard.folderId || ''
+            folderId: rateCard.folderId || '',
+            sharingPermissions: rateCard.sharingPermissions || {
+              type: 'internal',
+              permissions: {
+                level: 'view',
+                allowSharing: false,
+                allowDownload: true
+              }
+            }
           })
           setPricingData(rateCard.data)
         }
@@ -318,6 +350,95 @@ export function RateCardEditor() {
                     Active (available for calculations)
                   </label>
                 </div>
+              </div>
+            </div>
+
+            {/* Sharing Permissions */}
+            <div className="card">
+              <div className="card-header">
+                <h2 className="text-lg font-medium">Sharing & Permissions</h2>
+                <p className="text-sm text-gray-600">Control who can access this rate card</p>
+              </div>
+              <div className="card-body space-y-4">
+                <div>
+                  <label className="form-label">Sharing Type</label>
+                  <div className="space-y-3">
+                    <label className="flex items-start space-x-3">
+                      <input
+                        {...register('sharingPermissions.type')}
+                        type="radio"
+                        value="internal"
+                        className="mt-0.5 h-4 w-4 text-primary-600 border-gray-300"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-900">Internal</span>
+                        <p className="text-xs text-gray-600">Only people in your organization can access this rate card</p>
+                      </div>
+                    </label>
+                    <label className="flex items-start space-x-3">
+                      <input
+                        {...register('sharingPermissions.type')}
+                        type="radio"
+                        value="external"
+                        className="mt-0.5 h-4 w-4 text-primary-600 border-gray-300"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-900">External</span>
+                        <p className="text-xs text-gray-600">Anyone with the link can access this rate card (requires explicit sharing)</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label">Permission Level</label>
+                  <select {...register('sharingPermissions.permissions.level')} className="form-input">
+                    <option value="view">View only - Can view and use calculator</option>
+                    <option value="edit">Edit - Can modify rate card details</option>
+                    <option value="admin">Admin - Full control including sharing permissions</option>
+                  </select>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      {...register('sharingPermissions.permissions.allowSharing')}
+                      type="checkbox"
+                      className="h-4 w-4 text-primary-600 border-gray-300 rounded"
+                    />
+                    <span className="text-sm text-gray-700">Allow others to reshare this rate card</span>
+                  </label>
+
+                  <label className="flex items-center space-x-2">
+                    <input
+                      {...register('sharingPermissions.permissions.allowDownload')}
+                      type="checkbox"
+                      className="h-4 w-4 text-primary-600 border-gray-300 rounded"
+                    />
+                    <span className="text-sm text-gray-700">Allow download and export</span>
+                  </label>
+                </div>
+
+                {watchedSharingType === 'internal' && (
+                  <div>
+                    <label className="form-label">Organization Domain</label>
+                    <p className="text-xs text-gray-600 mb-2">
+                      People with emails from your organization domain can access this rate card
+                    </p>
+                    <input
+                      type="text"
+                      value={userDomain}
+                      disabled
+                      className="form-input bg-gray-50 text-gray-500"
+                      placeholder={userDomain || "yourcompany.com"}
+                    />
+                    {!userDomain && (
+                      <p className="text-xs text-red-600 mt-1">
+                        Unable to determine your organization domain. Please contact support.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

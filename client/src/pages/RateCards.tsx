@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PlusIcon, FolderIcon, DocumentArrowUpIcon, DocumentArrowDownIcon, EllipsisHorizontalIcon } from '@heroicons/react/24/outline'
 import { FolderTree } from '../components/folders/FolderTree'
 import { ImportModal, ExportModal } from '../components/import-export'
@@ -9,12 +10,12 @@ import type { Folder, PricingModel, RateCard } from '../types'
 import type { ImportResult } from '../services/importExport'
 
 export function RateCards() {
+  const navigate = useNavigate()
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
-  const [showCreateRateCardModal, setShowCreateRateCardModal] = useState(false)
   const [showFolderModal, setShowFolderModal] = useState(false)
   const [selectedPricingModel, setSelectedPricingModel] = useState<PricingModel>('tiered')
   const [folderModalData, setFolderModalData] = useState<{ folder?: Folder; parentId?: string | null }>({ parentId: null })
@@ -45,6 +46,10 @@ export function RateCards() {
     setFolderModalData({ folder, parentId: folder.parentId })
     setShowFolderModal(true)
   }, [])
+
+  const handleCreateRateCard = useCallback(() => {
+    navigate('/rate-cards/create')
+  }, [navigate])
 
   const handleFolderDelete = useCallback(async (folder: Folder) => {
     if (confirm(`Are you sure you want to delete "${folder.name}"? All rate cards will be moved to the root folder.`)) {
@@ -134,7 +139,7 @@ export function RateCards() {
               </div>
               {/* Create Rate Card button */}
               <button
-                onClick={() => setShowCreateRateCardModal(true)}
+                onClick={handleCreateRateCard}
                 className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
               >
                 <PlusIcon className="h-4 w-4 mr-2" />
@@ -208,7 +213,7 @@ export function RateCards() {
               </p>
               <div className="mt-6 flex justify-center space-x-4">
                 <button
-                  onClick={() => setShowCreateRateCardModal(true)}
+                  onClick={handleCreateRateCard}
                   className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
                 >
                   <PlusIcon className="h-4 w-4 mr-2" />

@@ -15,7 +15,13 @@
       "Bash(del:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(node:*)",
+      "Bash(npm --version)",
+      "Bash(dir dev.db)",
+      "Bash(if exist dev.db echo Database exists)",
+      "Bash(npm run:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

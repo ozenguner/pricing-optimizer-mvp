@@ -28,6 +28,20 @@ export interface Folder {
   rateCards: RateCard[]
 }
 
+export type SharingType = 'internal' | 'external'
+export type PermissionLevel = 'view' | 'edit' | 'admin'
+
+export interface SharingPermissions {
+  type: SharingType
+  allowedDomains?: string[] // For internal sharing
+  permissions: {
+    level: PermissionLevel
+    allowSharing?: boolean // Can reshare with others
+    allowDownload?: boolean // Can download/export
+    expiresAt?: string // Optional expiration
+  }
+}
+
 export interface RateCard {
   id: string
   name: string
@@ -36,6 +50,7 @@ export interface RateCard {
   data: PricingData
   isActive: boolean
   shareToken?: string
+  sharingPermissions: SharingPermissions
   folderId?: string
   userId: string
   createdAt: string

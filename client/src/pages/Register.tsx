@@ -37,11 +37,32 @@ export function Register() {
     try {
       setIsLoading(true)
       setError('')
+      console.log('Starting registration with:', { ...data, password: '[HIDDEN]' })
+      
       const { confirmPassword, ...registerData } = data
-      await authService.register(registerData)
+      const result = await authService.register(registerData)
+      
+      console.log('Registration successful!', result)
+      alert('Registration successful! Redirecting to dashboard...')
       navigate('/')
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed')
+      console.error('Registration error:', err)
+      console.error('Error response:', err.response?.data)
+      
+      // Handle different error response formats
+      let errorMessage = 'Registration failed'
+      if (err.response?.data?.errors) {
+        // Handle validation errors array
+        errorMessage = err.response.data.errors.map((e: any) => e.msg).join(', ')
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+      
+      setError(errorMessage)
     } finally {
       setIsLoading(false)
     }

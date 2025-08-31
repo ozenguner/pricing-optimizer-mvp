@@ -83,7 +83,14 @@ app.use(generalLimiter)
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? process.env.CLIENT_URL 
-    : 'http://localhost:3000',
+    : function(origin, callback) {
+        // Allow any localhost origin in development
+        if (!origin || origin.startsWith('http://localhost:')) {
+          callback(null, true)
+        } else {
+          callback(new Error('Not allowed by CORS'))
+        }
+      },
   credentials: true
 }))
 app.use(express.json({ limit: '10mb' }))

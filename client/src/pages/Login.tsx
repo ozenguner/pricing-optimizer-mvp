@@ -29,10 +29,29 @@ export function Login() {
     try {
       setIsLoading(true)
       setError('')
-      await authService.login(data)
+      console.log('Starting login with:', { ...data, password: '[HIDDEN]' })
+      
+      const result = await authService.login(data)
+      
+      console.log('Login successful!', result)
+      alert('Login successful! Redirecting to dashboard...')
       navigate('/')
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed')
+      console.error('Login error:', err)
+      console.error('Error response:', err.response?.data)
+      
+      let errorMessage = 'Login failed'
+      if (err.response?.data?.errors) {
+        errorMessage = err.response.data.errors.map((e: any) => e.msg).join(', ')
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+      
+      setError(errorMessage)
     } finally {
       setIsLoading(false)
     }
