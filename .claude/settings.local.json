@@ -21,7 +21,8 @@
       "Bash(dir dev.db)",
       "Bash(if exist dev.db echo Database exists)",
       "Bash(npm run:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
