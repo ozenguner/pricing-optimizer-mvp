@@ -1,0 +1,54 @@
+<h1>Verify Your Email Address</h1>
+
+<p class="lead">Welcome to {{companyName}}! We're excited to have you on board.</p>
+
+<p>To get started with your pricing optimization platform, please verify your email address by clicking the button below:</p>
+
+<div class="button-container">
+    <a href="{{verificationUrl}}" class="button">Verify Email Address</a>
+</div>
+
+<div class="alert alert-warning">
+    <strong>Important:</strong> This verification link will expire in <strong>{{expiryTime expiresAt}}</strong>. 
+    If you don't verify your email within this time, you'll need to request a new verification link.
+</div>
+
+<h2>What happens after verification?</h2>
+<p>Once you verify your email address, you'll be able to:</p>
+<ul style="color: #4a5568; margin-left: 20px; margin-bottom: 20px;">
+    <li>Access your pricing optimization dashboard</li>
+    <li>Create and manage rate cards</li>
+    <li>Import and export pricing data</li>
+    <li>Use our advanced pricing calculators</li>
+    <li>Organize your rate cards with folders</li>
+</ul>
+
+<div class="alert alert-info">
+    <strong>Didn't sign up for this account?</strong> If you received this email by mistake, you can safely ignore it. 
+    No account will be created without email verification.
+</div>
+
+<hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
+
+<h2>Alternative Verification Method</h2>
+<p>If the button above doesn't work, you can copy and paste this link into your browser:</p>
+<p style="background-color: #f7fafc; padding: 15px; border-radius: 8px; word-break: break-all; font-family: monospace; font-size: 14px; color: #2d3748;">
+    {{verificationUrl}}
+</p>
+
+<h2>Need Help?</h2>
+<p>If you're having trouble with email verification or have any questions about getting started, our support team is here to help:</p>
+
+<div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981; margin: 20px 0;">
+    <p style="margin: 0; color: #065f46;">
+        📧 <strong>Email:</strong> <a href="mailto:{{supportEmail}}" style="color: #059669;">{{supportEmail}}</a><br>
+        🕒 <strong>Response Time:</strong> Usually within 24 hours<br>
+        💬 <strong>Live Chat:</strong> Available on our <a href="{{baseUrl}}" style="color: #059669;">website</a>
+    </p>
+</div>
+
+<p style="margin-top: 30px; font-size: 14px; color: #718096;">
+    This email was sent to <strong>{{userEmail}}</strong> because you (or someone using your email address) 
+    created an account with {{companyName}}. This verification email will expire on 
+    <strong>{{formatDate expiresAt 'short'}}</strong>.
+</p>
