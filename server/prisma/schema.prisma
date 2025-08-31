@@ -8,20 +8,28 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String    @id @default(uuid())
+  email        String    @unique
+  password     String
+  name         String
+  verified     Boolean   @default(false)
+  verifiedAt   DateTime?
+  lastLoginAt  DateTime?
+  loginAttempts Int      @default(0)
+  lockedUntil  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   
-  folders      Folder[]
-  rateCards    RateCard[]
-  securityLogs SecurityLog[]
+  folders           Folder[]
+  rateCards         RateCard[]
+  securityLogs      SecurityLog[]
+  verificationTokens VerificationToken[]
   
   // Performance indexes for common queries
   @@index([createdAt])
   @@index([email, createdAt])
+  @@index([verified])
+  @@index([lockedUntil])
 }
 
 model Folder {
@@ -91,5 +99,22 @@ model SecurityLog {
   @@index([ipAddress])
   @@index([timestamp])
   @@index([eventType, timestamp])
+}
+
+model VerificationToken {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  userId    String
+  type      String    // 'email_verification' | 'password_reset'
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([token])
+  @@index([userId])
+  @@index([type])
+  @@index([expiresAt])
 }
 
