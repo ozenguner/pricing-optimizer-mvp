@@ -34,11 +34,17 @@ export function Login() {
       const result = await authService.login(data)
       
       console.log('Login successful!', result)
-      alert('Login successful! Redirecting to dashboard...')
       navigate('/')
     } catch (err: any) {
       console.error('Login error:', err)
       console.error('Error response:', err.response?.data)
+      
+      // Email verification handling disabled
+      // if (err.response?.status === 403 && err.response?.data?.requiresVerification) {
+      //   const email = err.response.data.email || data.email
+      //   navigate(`/verify-email?email=${encodeURIComponent(email)}`)
+      //   return
+      // }
       
       let errorMessage = 'Login failed'
       if (err.response?.data?.errors) {

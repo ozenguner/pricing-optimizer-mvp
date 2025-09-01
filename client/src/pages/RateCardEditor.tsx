@@ -5,15 +5,20 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { rateCardService } from '../services/rateCards'
 import { folderService } from '../services/folders'
+import { hierarchyService } from '../services/hierarchy'
 import { authService } from '../services/auth'
-import type { RateCard, PricingModel, Folder, TieredPricing, SeatBasedPricing, FlatRatePricing, CostPlusPricing, SubscriptionPricing } from '../types'
+import type { RateCard, PricingModel, Folder, Currency, OwnerTeam, Account, ProductSuite, SKU, TieredPricing, SeatBasedPricing, FlatRatePricing, CostPlusPricing, SubscriptionPricing } from '../types'
+import { CurrencySymbols } from '../types'
 
 // Base schema for all rate cards
 const baseSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
+  currency: z.enum(['USD', 'EUR', 'GBP', 'CAD', 'JPY']),
+  ownerTeam: z.enum(['Marketing', 'Sales', 'Pricing', 'Finance']),
   pricingModel: z.enum(['tiered', 'seat-based', 'flat-rate', 'cost-plus', 'subscription']),
   isActive: z.boolean(),
+  skuId: z.string().optional(),
   folderId: z.string().optional(),
   sharingPermissions: z.object({
     type: z.enum(['internal', 'external']),
@@ -32,32 +37,38 @@ const tieredSchema = z.object({
   tiers: z.array(z.object({
     min: z.number().min(0),
     max: z.number().nullable(),
-    pricePerUnit: z.number().min(0)
+    pricePerUnit: z.number().min(0),
+    costPerUnit: z.number().min(0).optional()
   })).min(1, 'At least one tier is required')
 })
 
 const seatBasedSchema = z.object({
-  pricePerSeat: z.number().min(0),
-  minimumSeats: z.number().min(0).optional(),
-  volumeDiscounts: z.array(z.object({
-    minSeats: z.number().min(1),
-    discountPercent: z.number().min(0).max(100)
-  })).optional()
+  lineItems: z.array(z.object({
+    name: z.string().min(1),
+    pricePerSeat: z.number().min(0),
+    costPerSeat: z.number().min(0).optional()
+  })).min(1, 'At least one line item is required'),
+  minimumSeats: z.number().min(0).optional()
 })
 
 const flatRateSchema = z.object({
   price: z.number().min(0),
+  cost: z.number().min(0).optional(),
   billingPeriod: z.enum(['one-time', 'monthly', 'yearly']).optional()
 })
 
 const costPlusSchema = z.object({
   baseCost: z.number().min(0),
-  markupPercent: z.number().min(0)
+  costPerUnit: z.number().min(0).optional(),
+  markupPercent: z.number().min(0),
+  units: z.string().min(1)
 })
 
 const subscriptionSchema = z.object({
-  monthlyPrice: z.number().min(0),
-  yearlyPrice: z.number().min(0).optional(),
+  termType: z.enum(['days', 'months', 'quarters', 'years']),
+  pricePerTerm: z.number().min(0),
+  costPerTerm: z.number().min(0).optional(),
+  numberOfTerms: z.number().min(1),
   setupFee: z.number().min(0).optional(),
   features: z.array(z.string()).optional()
 })
@@ -71,6 +82,11 @@ export function RateCardEditor() {
 
   const [rateCard, setRateCard] = useState<RateCard | null>(null)
   const [folders, setFolders] = useState<Folder[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [productSuites, setProductSuites] = useState<ProductSuite[]>([])
+  const [skus, setSKUs] = useState<SKU[]>([])
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('')
+  const [selectedProductSuiteId, setSelectedProductSuiteId] = useState<string>('')
   const [loading, setLoading] = useState(isEditing)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,8 +104,11 @@ export function RateCardEditor() {
     defaultValues: {
       name: '',
       description: '',
+      currency: 'USD' as Currency,
+      ownerTeam: 'Pricing' as OwnerTeam,
       pricingModel: 'tiered',
       isActive: true,
+      skuId: '',
       folderId: '',
       sharingPermissions: {
         type: 'internal',
@@ -109,24 +128,62 @@ export function RateCardEditor() {
   const currentUser = authService.getStoredUser()
   const userDomain = currentUser?.email ? currentUser.email.split('@')[1] : ''
 
+  const getDefaultPricingData = (model: PricingModel) => {
+    switch (model) {
+      case 'tiered':
+        return { tiers: [{ min: 0, max: null, pricePerUnit: 0, costPerUnit: 0 }] }
+      case 'seat-based':
+        return { lineItems: [{ name: 'Basic Seat', pricePerSeat: 0, costPerSeat: 0 }], minimumSeats: undefined }
+      case 'flat-rate':
+        return { price: 0, cost: 0, billingPeriod: 'one-time' }
+      case 'cost-plus':
+        return { baseCost: 0, costPerUnit: 0, markupPercent: 0, units: '' }
+      case 'subscription':
+        return { termType: 'months', pricePerTerm: 0, costPerTerm: 0, numberOfTerms: 1, setupFee: 0, features: [] }
+      default:
+        return {}
+    }
+  }
+
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [foldersResponse, rateCardData] = await Promise.all([
+        const [foldersResponse, accountsResponse, rateCardData] = await Promise.all([
           folderService.getAll(),
+          hierarchyService.getAccounts({ limit: 100 }),
           isEditing && id ? rateCardService.getById(id) : Promise.resolve(null)
         ])
 
         setFolders(foldersResponse.folders)
+        setAccounts(accountsResponse.accounts || [])
 
         if (rateCardData) {
           const { rateCard } = rateCardData
           setRateCard(rateCard)
+          
+          // If rate card has SKU, load the hierarchy
+          if (rateCard.sku?.productSuite?.accountId) {
+            setSelectedAccountId(rateCard.sku.productSuite.accountId)
+            const productSuitesResponse = await hierarchyService.getProductSuites({ 
+              accountId: rateCard.sku.productSuite.accountId 
+            })
+            setProductSuites(productSuitesResponse.productSuites || [])
+            
+            setSelectedProductSuiteId(rateCard.sku.productSuiteId)
+            const skusResponse = await hierarchyService.getSKUs({ 
+              productSuiteId: rateCard.sku.productSuiteId 
+            })
+            setSKUs(skusResponse.skus || [])
+          }
+          
           reset({
             name: rateCard.name,
             description: rateCard.description || '',
+            currency: rateCard.currency || 'USD',
+            ownerTeam: (rateCard.ownerTeam as OwnerTeam) || 'Pricing',
             pricingModel: rateCard.pricingModel,
             isActive: rateCard.isActive,
+            skuId: rateCard.skuId || '',
             folderId: rateCard.folderId || '',
             sharingPermissions: rateCard.sharingPermissions || {
               type: 'internal',
@@ -138,6 +195,10 @@ export function RateCardEditor() {
             }
           })
           setPricingData(rateCard.data)
+        } else {
+          // Initialize with default data for new rate cards
+          const defaultModel = 'tiered' as PricingModel
+          setPricingData(getDefaultPricingData(defaultModel))
         }
       } catch (err) {
         setError('Failed to load data')
@@ -149,8 +210,46 @@ export function RateCardEditor() {
     loadData()
   }, [id, isEditing, reset])
 
+  // Handle account selection change
+  const handleAccountChange = async (accountId: string) => {
+    setSelectedAccountId(accountId)
+    setSelectedProductSuiteId('')
+    setProductSuites([])
+    setSKUs([])
+    setValue('skuId', '')
+    
+    if (accountId) {
+      try {
+        const response = await hierarchyService.getProductSuites({ accountId })
+        setProductSuites(response.productSuites || [])
+      } catch (err) {
+        console.error('Failed to load product suites:', err)
+      }
+    }
+  }
+
+  // Handle product suite selection change
+  const handleProductSuiteChange = async (productSuiteId: string) => {
+    setSelectedProductSuiteId(productSuiteId)
+    setSKUs([])
+    setValue('skuId', '')
+    
+    if (productSuiteId) {
+      try {
+        const response = await hierarchyService.getSKUs({ productSuiteId })
+        setSKUs(response.skus || [])
+      } catch (err) {
+        console.error('Failed to load SKUs:', err)
+      }
+    }
+  }
+
   const calculatePreview = (model: PricingModel, data: any, quantity: number = 10) => {
     try {
+      if (!data || Object.keys(data).length === 0) {
+        return 0
+      }
+      
       switch (model) {
         case 'tiered':
           return calculateTieredPrice(data as TieredPricing, quantity)
@@ -165,7 +264,8 @@ export function RateCardEditor() {
         default:
           return 0
       }
-    } catch {
+    } catch (error) {
+      console.error('Preview calculation error:', error)
       return 0
     }
   }
@@ -193,19 +293,11 @@ export function RateCardEditor() {
   }
 
   const calculateSeatBasedPrice = (data: SeatBasedPricing, seats: number) => {
-    const basePrice = seats * data.pricePerSeat
+    if (!data.lineItems || data.lineItems.length === 0) return 0
     
-    if (data.volumeDiscounts) {
-      const applicableDiscount = data.volumeDiscounts
-        .filter(d => seats >= d.minSeats)
-        .sort((a, b) => b.discountPercent - a.discountPercent)[0]
-      
-      if (applicableDiscount) {
-        return basePrice * (1 - applicableDiscount.discountPercent / 100)
-      }
-    }
-
-    return basePrice
+    return data.lineItems.reduce((total, item) => {
+      return total + (seats * item.pricePerSeat)
+    }, 0)
   }
 
   const calculateFlatRatePrice = (data: FlatRatePricing) => {
@@ -219,7 +311,10 @@ export function RateCardEditor() {
   }
 
   const calculateSubscriptionPrice = (data: SubscriptionPricing) => {
-    return data.monthlyPrice || 0
+    if (!data.pricePerTerm || !data.numberOfTerms) return 0
+    
+    const totalPrice = data.pricePerTerm * data.numberOfTerms
+    return totalPrice + (data.setupFee || 0)
   }
 
   const onSubmit = async (formData: FormData) => {
@@ -311,6 +406,85 @@ export function RateCardEditor() {
                 </div>
 
                 <div>
+                  <label className="form-label">Owner Team</label>
+                  <select {...register('ownerTeam')} className="form-input">
+                    <option value="Pricing">Pricing</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Sales">Sales</option>
+                    <option value="Finance">Finance</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="form-label">Currency</label>
+                  <select {...register('currency')} className="form-input">
+                    <option value="USD">$ USD - US Dollar</option>
+                    <option value="EUR">€ EUR - Euro</option>
+                    <option value="GBP">£ GBP - British Pound</option>
+                    <option value="CAD">C$ CAD - Canadian Dollar</option>
+                    <option value="JPY">¥ JPY - Japanese Yen</option>
+                  </select>
+                </div>
+
+                {/* Hierarchical Structure Section */}
+                <div className="border-t pt-4">
+                  <h3 className="text-md font-medium text-gray-900 mb-3">Product Hierarchy (Optional)</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Link this rate card to a specific SKU in your product hierarchy for better organization
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <label className="form-label">Account</label>
+                      <select
+                        value={selectedAccountId}
+                        onChange={(e) => handleAccountChange(e.target.value)}
+                        className="form-input"
+                      >
+                        <option value="">Select an account (optional)</option>
+                        {accounts.map(account => (
+                          <option key={account.id} value={account.id}>
+                            {account.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {selectedAccountId && (
+                      <div>
+                        <label className="form-label">Product Suite</label>
+                        <select
+                          value={selectedProductSuiteId}
+                          onChange={(e) => handleProductSuiteChange(e.target.value)}
+                          className="form-input"
+                        >
+                          <option value="">Select a product suite</option>
+                          {productSuites.map(suite => (
+                            <option key={suite.id} value={suite.id}>
+                              {suite.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {selectedProductSuiteId && (
+                      <div>
+                        <label className="form-label">SKU</label>
+                        <select {...register('skuId')} className="form-input">
+                          <option value="">Select a SKU</option>
+                          {skus.map(sku => (
+                            <option key={sku.id} value={sku.id}>
+                              {sku.code} - {sku.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
                   <label className="form-label">Folder</label>
                   <select {...register('folderId')} className="form-input">
                     <option value="">Root (No folder)</option>
@@ -328,8 +502,11 @@ export function RateCardEditor() {
                     {...register('pricingModel')}
                     className="form-input"
                     onChange={(e) => {
-                      setValue('pricingModel', e.target.value as PricingModel)
-                      setPricingData({}) // Reset pricing data when model changes
+                      const newModel = e.target.value as PricingModel
+                      setValue('pricingModel', newModel)
+                      // Initialize with appropriate default data structure
+                      const defaultData = getDefaultPricingData(newModel)
+                      setPricingData(defaultData)
                     }}
                   >
                     <option value="tiered">Tiered Pricing</option>
@@ -478,6 +655,7 @@ export function RateCardEditor() {
               <PricingPreview
                 pricingModel={watchedPricingModel}
                 data={pricingData}
+                currency={watch('currency') || 'USD'}
                 calculatePreview={calculatePreview}
               />
             </div>
@@ -512,10 +690,10 @@ function PricingModelForm({ pricingModel, data, onChange }: PricingModelFormProp
 }
 
 function TieredPricingForm({ data, onChange }: { data: TieredPricing, onChange: (data: any) => void }) {
-  const tiers = data.tiers || [{ min: 0, max: null, pricePerUnit: 0 }]
+  const tiers = data.tiers || [{ min: 0, max: null, pricePerUnit: 0, costPerUnit: 0 }]
 
   const addTier = () => {
-    const newTiers = [...tiers, { min: 0, max: null, pricePerUnit: 0 }]
+    const newTiers = [...tiers, { min: 0, max: null, pricePerUnit: 0, costPerUnit: 0 }]
     onChange({ ...data, tiers: newTiers })
   }
 
@@ -551,7 +729,7 @@ function TieredPricingForm({ data, onChange }: { data: TieredPricing, onChange: 
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <label className="form-label text-sm">Min Quantity</label>
                 <input
@@ -572,6 +750,8 @@ function TieredPricingForm({ data, onChange }: { data: TieredPricing, onChange: 
                   placeholder="Unlimited"
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="form-label text-sm">Price per Unit</label>
                 <input
@@ -581,6 +761,18 @@ function TieredPricingForm({ data, onChange }: { data: TieredPricing, onChange: 
                   className="form-input"
                   step="0.01"
                   min="0"
+                />
+              </div>
+              <div>
+                <label className="form-label text-sm">Cost per Unit (Optional)</label>
+                <input
+                  type="number"
+                  value={tier.costPerUnit || ''}
+                  onChange={(e) => updateTier(index, 'costPerUnit', e.target.value ? parseFloat(e.target.value) : undefined)}
+                  className="form-input"
+                  step="0.01"
+                  min="0"
+                  placeholder="For margin calculation"
                 />
               </div>
             </div>
@@ -599,102 +791,105 @@ function TieredPricingForm({ data, onChange }: { data: TieredPricing, onChange: 
 }
 
 function SeatBasedPricingForm({ data, onChange }: { data: SeatBasedPricing, onChange: (data: any) => void }) {
-  const volumeDiscounts = data.volumeDiscounts || []
+  const lineItems = data.lineItems || [{ name: 'Basic Seat', pricePerSeat: 0, costPerSeat: 0 }]
 
-  const addVolumeDiscount = () => {
-    const newDiscounts = [...volumeDiscounts, { minSeats: 1, discountPercent: 0 }]
-    onChange({ ...data, volumeDiscounts: newDiscounts })
+  const addLineItem = () => {
+    const newLineItems = [...lineItems, { name: '', pricePerSeat: 0, costPerSeat: 0 }]
+    onChange({ ...data, lineItems: newLineItems })
   }
 
-  const removeVolumeDiscount = (index: number) => {
-    const newDiscounts = volumeDiscounts.filter((_, i) => i !== index)
-    onChange({ ...data, volumeDiscounts: newDiscounts })
+  const removeLineItem = (index: number) => {
+    const newLineItems = lineItems.filter((_, i) => i !== index)
+    onChange({ ...data, lineItems: newLineItems })
   }
 
-  const updateVolumeDiscount = (index: number, field: string, value: any) => {
-    const newDiscounts = volumeDiscounts.map((discount, i) => 
-      i === index ? { ...discount, [field]: value } : discount
+  const updateLineItem = (index: number, field: string, value: any) => {
+    const newLineItems = lineItems.map((item, i) => 
+      i === index ? { ...item, [field]: value } : item
     )
-    onChange({ ...data, volumeDiscounts: newDiscounts })
+    onChange({ ...data, lineItems: newLineItems })
   }
 
   return (
     <div className="card">
       <div className="card-header">
         <h3 className="text-lg font-medium">Seat-Based Pricing Configuration</h3>
+        <p className="text-sm text-gray-600">Configure multiple line items with different per-seat pricing</p>
       </div>
       <div className="card-body space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="form-label">Price per Seat</label>
-            <input
-              type="number"
-              value={data.pricePerSeat || ''}
-              onChange={(e) => onChange({ ...data, pricePerSeat: parseFloat(e.target.value) || 0 })}
-              className="form-input"
-              step="0.01"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="form-label">Minimum Seats</label>
-            <input
-              type="number"
-              value={data.minimumSeats || ''}
-              onChange={(e) => onChange({ ...data, minimumSeats: parseInt(e.target.value) || undefined })}
-              className="form-input"
-              min="0"
-              placeholder="Optional"
-            />
-          </div>
+        <div>
+          <label className="form-label">Minimum Seats (Optional)</label>
+          <input
+            type="number"
+            value={data.minimumSeats || ''}
+            onChange={(e) => onChange({ ...data, minimumSeats: parseInt(e.target.value) || undefined })}
+            className="form-input"
+            min="0"
+            placeholder="No minimum requirement"
+          />
         </div>
 
         <div>
           <div className="flex justify-between items-center mb-3">
-            <h4 className="font-medium">Volume Discounts</h4>
+            <h4 className="font-medium">Line Items</h4>
             <button
               type="button"
-              onClick={addVolumeDiscount}
+              onClick={addLineItem}
               className="text-primary-600 hover:text-primary-800 text-sm"
             >
-              Add Discount
+              Add Line Item
             </button>
           </div>
           
-          {volumeDiscounts.map((discount, index) => (
-            <div key={index} className="p-3 border border-gray-200 rounded-lg mb-3">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium">Discount {index + 1}</span>
-                <button
-                  type="button"
-                  onClick={() => removeVolumeDiscount(index)}
-                  className="text-red-600 hover:text-red-800 text-sm"
-                >
-                  Remove
-                </button>
+          {lineItems.map((item, index) => (
+            <div key={index} className="p-4 border border-gray-200 rounded-lg mb-3">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-sm font-medium">Line Item {index + 1}</span>
+                {lineItems.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeLineItem(index)}
+                    className="text-red-600 hover:text-red-800 text-sm"
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">
                 <div>
-                  <label className="form-label text-sm">Min Seats</label>
+                  <label className="form-label text-sm">Item Name</label>
                   <input
-                    type="number"
-                    value={discount.minSeats}
-                    onChange={(e) => updateVolumeDiscount(index, 'minSeats', parseInt(e.target.value) || 1)}
+                    type="text"
+                    value={item.name}
+                    onChange={(e) => updateLineItem(index, 'name', e.target.value)}
                     className="form-input"
-                    min="1"
+                    placeholder="e.g., Premium License, Basic Access"
                   />
                 </div>
-                <div>
-                  <label className="form-label text-sm">Discount %</label>
-                  <input
-                    type="number"
-                    value={discount.discountPercent}
-                    onChange={(e) => updateVolumeDiscount(index, 'discountPercent', parseFloat(e.target.value) || 0)}
-                    className="form-input"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="form-label text-sm">Price per Seat</label>
+                    <input
+                      type="number"
+                      value={item.pricePerSeat}
+                      onChange={(e) => updateLineItem(index, 'pricePerSeat', parseFloat(e.target.value) || 0)}
+                      className="form-input"
+                      step="0.01"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label text-sm">Cost per Seat (Optional)</label>
+                    <input
+                      type="number"
+                      value={item.costPerSeat || ''}
+                      onChange={(e) => updateLineItem(index, 'costPerSeat', e.target.value ? parseFloat(e.target.value) : undefined)}
+                      className="form-input"
+                      step="0.01"
+                      min="0"
+                      placeholder="For margin calculation"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -725,17 +920,29 @@ function FlatRatePricingForm({ data, onChange }: { data: FlatRatePricing, onChan
             />
           </div>
           <div>
-            <label className="form-label">Billing Period</label>
-            <select
-              value={data.billingPeriod || 'one-time'}
-              onChange={(e) => onChange({ ...data, billingPeriod: e.target.value })}
+            <label className="form-label">Cost (Optional)</label>
+            <input
+              type="number"
+              value={data.cost || ''}
+              onChange={(e) => onChange({ ...data, cost: e.target.value ? parseFloat(e.target.value) : undefined })}
               className="form-input"
-            >
-              <option value="one-time">One-time</option>
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
-            </select>
+              step="0.01"
+              min="0"
+              placeholder="For margin calculation"
+            />
           </div>
+        </div>
+        <div>
+          <label className="form-label">Billing Period</label>
+          <select
+            value={data.billingPeriod || 'one-time'}
+            onChange={(e) => onChange({ ...data, billingPeriod: e.target.value })}
+            className="form-input"
+          >
+            <option value="one-time">One-time</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
         </div>
       </div>
     </div>
@@ -747,8 +954,19 @@ function CostPlusPricingForm({ data, onChange }: { data: CostPlusPricing, onChan
     <div className="card">
       <div className="card-header">
         <h3 className="text-lg font-medium">Cost-Plus Pricing Configuration</h3>
+        <p className="text-sm text-gray-600">Set a base cost and markup percentage</p>
       </div>
       <div className="card-body space-y-4">
+        <div>
+          <label className="form-label">Units</label>
+          <input
+            type="text"
+            value={data.units || ''}
+            onChange={(e) => onChange({ ...data, units: e.target.value })}
+            className="form-input"
+            placeholder="e.g., hours, days, licenses, etc."
+          />
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="form-label">Base Cost</label>
@@ -762,16 +980,29 @@ function CostPlusPricingForm({ data, onChange }: { data: CostPlusPricing, onChan
             />
           </div>
           <div>
-            <label className="form-label">Markup Percentage</label>
+            <label className="form-label">Cost per Unit (Optional)</label>
             <input
               type="number"
-              value={data.markupPercent || ''}
-              onChange={(e) => onChange({ ...data, markupPercent: parseFloat(e.target.value) || 0 })}
+              value={data.costPerUnit || ''}
+              onChange={(e) => onChange({ ...data, costPerUnit: e.target.value ? parseFloat(e.target.value) : undefined })}
               className="form-input"
-              step="0.1"
+              step="0.01"
               min="0"
+              placeholder="For margin calculation"
             />
           </div>
+        </div>
+        <div>
+          <label className="form-label">Markup Percentage</label>
+          <input
+            type="number"
+            value={data.markupPercent || ''}
+            onChange={(e) => onChange({ ...data, markupPercent: parseFloat(e.target.value) || 0 })}
+            className="form-input"
+            step="0.1"
+            min="0"
+            placeholder="e.g., 25 for 25%"
+          />
         </div>
       </div>
     </div>
@@ -798,53 +1029,98 @@ function SubscriptionPricingForm({ data, onChange }: { data: SubscriptionPricing
     onChange({ ...data, features: newFeatures })
   }
 
+  const calculateTotal = () => {
+    const termTotal = (data.pricePerTerm || 0) * (data.numberOfTerms || 0)
+    return termTotal + (data.setupFee || 0)
+  }
+
   return (
     <div className="card">
       <div className="card-header">
         <h3 className="text-lg font-medium">Subscription Pricing Configuration</h3>
+        <p className="text-sm text-gray-600">Configure term-based subscription pricing</p>
       </div>
       <div className="card-body space-y-4">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="form-label">Monthly Price</label>
+            <label className="form-label">Subscription Term Type</label>
+            <select
+              value={data.termType || 'months'}
+              onChange={(e) => onChange({ ...data, termType: e.target.value as any })}
+              className="form-input"
+            >
+              <option value="days">Days</option>
+              <option value="months">Months</option>
+              <option value="quarters">Quarters</option>
+              <option value="years">Years</option>
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Number of Terms</label>
             <input
               type="number"
-              value={data.monthlyPrice || ''}
-              onChange={(e) => onChange({ ...data, monthlyPrice: parseFloat(e.target.value) || 0 })}
+              value={data.numberOfTerms || ''}
+              onChange={(e) => onChange({ ...data, numberOfTerms: parseInt(e.target.value) || 1 })}
+              className="form-input"
+              min="1"
+              placeholder="1"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="form-label">Price per Term</label>
+            <input
+              type="number"
+              value={data.pricePerTerm || ''}
+              onChange={(e) => onChange({ ...data, pricePerTerm: parseFloat(e.target.value) || 0 })}
               className="form-input"
               step="0.01"
               min="0"
             />
           </div>
           <div>
-            <label className="form-label">Yearly Price</label>
+            <label className="form-label">Cost per Term (Optional)</label>
             <input
               type="number"
-              value={data.yearlyPrice || ''}
-              onChange={(e) => onChange({ ...data, yearlyPrice: parseFloat(e.target.value) || undefined })}
+              value={data.costPerTerm || ''}
+              onChange={(e) => onChange({ ...data, costPerTerm: e.target.value ? parseFloat(e.target.value) : undefined })}
               className="form-input"
               step="0.01"
               min="0"
-              placeholder="Optional"
-            />
-          </div>
-          <div>
-            <label className="form-label">Setup Fee</label>
-            <input
-              type="number"
-              value={data.setupFee || ''}
-              onChange={(e) => onChange({ ...data, setupFee: parseFloat(e.target.value) || undefined })}
-              className="form-input"
-              step="0.01"
-              min="0"
-              placeholder="Optional"
+              placeholder="For margin calculation"
             />
           </div>
         </div>
 
         <div>
+          <label className="form-label">Setup Fee (Optional)</label>
+          <input
+            type="number"
+            value={data.setupFee || ''}
+            onChange={(e) => onChange({ ...data, setupFee: e.target.value ? parseFloat(e.target.value) : undefined })}
+            className="form-input"
+            step="0.01"
+            min="0"
+            placeholder="One-time setup fee"
+          />
+        </div>
+
+        {data.pricePerTerm && data.numberOfTerms && (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="text-sm text-blue-800">
+              <div className="font-medium">Subscription Summary:</div>
+              <div>Price: {data.pricePerTerm} × {data.numberOfTerms} {data.termType} = {(data.pricePerTerm * data.numberOfTerms).toFixed(2)}</div>
+              {data.setupFee && <div>Setup Fee: {data.setupFee}</div>}
+              <div className="font-medium">Total: {calculateTotal().toFixed(2)}</div>
+            </div>
+          </div>
+        )}
+
+        <div>
           <div className="flex justify-between items-center mb-3">
-            <label className="form-label">Features</label>
+            <label className="form-label">Features (Optional)</label>
             <button
               type="button"
               onClick={addFeature}
@@ -881,89 +1157,159 @@ function SubscriptionPricingForm({ data, onChange }: { data: SubscriptionPricing
 interface PricingPreviewProps {
   pricingModel: PricingModel
   data: any
+  currency: Currency
   calculatePreview: (model: PricingModel, data: any, quantity?: number) => number
 }
 
-function PricingPreview({ pricingModel, data, calculatePreview }: PricingPreviewProps) {
-  const [previewQuantity, setPreviewQuantity] = useState(10)
-
+function PricingPreview({ pricingModel, data, currency, calculatePreview }: PricingPreviewProps) {
+  const previewQuantity = 10 // Fixed quantity for preview
   const price = calculatePreview(pricingModel, data, previewQuantity)
 
   const formatCurrency = (amount: number) => {
+    const currencyCode = currency || 'USD'
+    const symbol = CurrencySymbols[currencyCode] || '$'
+    
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD'
-    }).format(amount)
+      currency: currencyCode,
+      currencyDisplay: 'symbol'
+    }).format(amount).replace(/^[^0-9-]+/, symbol)
   }
 
-  const getQuantityLabel = () => {
+  const getPreviewLabel = () => {
     switch (pricingModel) {
       case 'seat-based':
-        return 'Seats'
+        return `for ${previewQuantity} seats`
       case 'tiered':
-        return 'Quantity'
+        return `for ${previewQuantity} units`
       case 'flat-rate':
+        return data.billingPeriod ? `per ${data.billingPeriod.replace('-', ' ')}` : 'total price'
       case 'cost-plus':
+        return data.units ? `per ${data.units}` : 'total price'
       case 'subscription':
-        return 'Units'
+        return data.termType ? `total for ${data.numberOfTerms || 1} ${data.termType}` : 'total subscription'
       default:
-        return 'Quantity'
+        return 'total price'
     }
+  }
+
+  const renderModelSpecificInfo = () => {
+    switch (pricingModel) {
+      case 'tiered':
+        if (data.tiers && data.tiers.length > 0) {
+          return (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-gray-900">Pricing Tiers</h4>
+              {data.tiers.map((tier: any, index: number) => (
+                <div key={index} className="text-xs text-gray-600 flex justify-between">
+                  <span>{tier.min} - {tier.max || '∞'} units</span>
+                  <span>{formatCurrency(tier.pricePerUnit)}/unit</span>
+                </div>
+              ))}
+            </div>
+          )
+        }
+        break
+      
+      case 'seat-based':
+        if (data.lineItems && data.lineItems.length > 0) {
+          return (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-gray-900">Line Items</h4>
+              {data.lineItems.map((item: any, index: number) => (
+                <div key={index} className="text-xs text-gray-600 flex justify-between">
+                  <span>{item.name}</span>
+                  <span>{formatCurrency(item.pricePerSeat)}/seat</span>
+                </div>
+              ))}
+              {data.minimumSeats && (
+                <div className="text-xs text-blue-600">
+                  Minimum: {data.minimumSeats} seats
+                </div>
+              )}
+            </div>
+          )
+        }
+        break
+      
+      case 'subscription':
+        if (data.pricePerTerm && data.numberOfTerms) {
+          return (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-gray-900">Subscription Details</h4>
+              <div className="text-xs text-gray-600">
+                <div>Price per {data.termType?.slice(0, -1) || 'term'}: {formatCurrency(data.pricePerTerm)}</div>
+                <div>Number of {data.termType || 'terms'}: {data.numberOfTerms}</div>
+                {data.setupFee && <div>Setup fee: {formatCurrency(data.setupFee)}</div>}
+              </div>
+            </div>
+          )
+        }
+        break
+      
+      case 'cost-plus':
+        if (data.baseCost && data.markupPercent) {
+          const markup = data.baseCost * (data.markupPercent / 100)
+          return (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-gray-900">Cost Breakdown</h4>
+              <div className="text-xs text-gray-600">
+                <div>Base cost: {formatCurrency(data.baseCost)}</div>
+                <div>Markup ({data.markupPercent}%): {formatCurrency(markup)}</div>
+                {data.units && <div>Unit: {data.units}</div>}
+              </div>
+            </div>
+          )
+        }
+        break
+    }
+    return null
   }
 
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-medium text-gray-900 mb-2">Preview Calculation</h3>
+        <h3 className="text-sm font-medium text-gray-900 mb-2">Output Preview</h3>
         <div className="text-sm text-gray-600">
           Model: <span className="font-medium capitalize">{pricingModel.replace('-', ' ')}</span>
         </div>
       </div>
-
-      {pricingModel !== 'flat-rate' && pricingModel !== 'subscription' && (
-        <div>
-          <label className="form-label text-sm">{getQuantityLabel()}</label>
-          <input
-            type="number"
-            value={previewQuantity}
-            onChange={(e) => setPreviewQuantity(parseInt(e.target.value) || 1)}
-            className="form-input"
-            min="1"
-          />
-        </div>
-      )}
 
       <div className="p-4 bg-primary-50 border border-primary-200 rounded-lg">
         <div className="text-center">
           <div className="text-2xl font-bold text-primary-900">
             {formatCurrency(price)}
           </div>
-          {pricingModel !== 'flat-rate' && pricingModel !== 'subscription' && (
-            <div className="text-sm text-primary-600">
-              for {previewQuantity} {getQuantityLabel().toLowerCase()}
-            </div>
-          )}
-          {pricingModel === 'subscription' && (
-            <div className="text-sm text-primary-600">
-              per month
-            </div>
-          )}
+          <div className="text-sm text-primary-600">
+            {getPreviewLabel()}
+          </div>
         </div>
       </div>
 
-      {/* Pricing breakdown for tiered model */}
-      {pricingModel === 'tiered' && data.tiers && data.tiers.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-sm font-medium text-gray-900">Pricing Tiers</h4>
-          {data.tiers.map((tier: any, index: number) => (
-            <div key={index} className="text-xs text-gray-600 flex justify-between">
-              <span>
-                {tier.min} - {tier.max || '∞'}: {formatCurrency(tier.pricePerUnit)}/unit
-              </span>
+      {renderModelSpecificInfo()}
+
+      {(() => {
+        try {
+          const hasCostData = data && typeof data === 'object' && Object.values(data).some((value: any) => {
+            if (Array.isArray(value)) {
+              return value.some(item => typeof item === 'object' && Object.keys(item).some(key => key.toLowerCase().includes('cost')))
+            }
+            if (typeof value === 'object' && value !== null) {
+              return Object.keys(value).some(key => key.toLowerCase().includes('cost'))
+            }
+            return false
+          })
+          
+          return hasCostData && (
+            <div className="text-xs text-green-600 text-center">
+              💰 Cost data available for margin calculations
             </div>
-          ))}
-        </div>
-      )}
+          )
+        } catch (error) {
+          console.error('Cost detection error:', error)
+          return null
+        }
+      })()}
     </div>
   )
 }export default RateCardEditor

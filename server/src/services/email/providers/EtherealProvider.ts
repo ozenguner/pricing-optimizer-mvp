@@ -3,7 +3,7 @@ import { BaseEmailProvider } from './BaseEmailProvider.js';
 import { EmailMessage, EmailResult, EtherealConfig, EmailAddress } from '../../../types/email.js';
 
 export class EtherealProvider extends BaseEmailProvider {
-  private config: EtherealConfig;
+  protected config: EtherealConfig;
   private transporter: nodemailer.Transporter | null = null;
   private testAccount: nodemailer.TestAccount | null = null;
 
@@ -28,7 +28,7 @@ export class EtherealProvider extends BaseEmailProvider {
       throw new Error('Failed to create Ethereal test account');
     }
 
-    this.transporter = nodemailer.createTransporter({
+    this.transporter = nodemailer.createTransport({
       host: 'smtp.ethereal.email',
       port: 587,
       secure: false,
@@ -58,6 +58,12 @@ export class EtherealProvider extends BaseEmailProvider {
       
       // Generate preview URL for development
       const previewUrl = nodemailer.getTestMessageUrl(result);
+      
+      // Log the preview URL so developers can see their emails
+      if (previewUrl) {
+        console.log(`\n📧 Email Preview URL: ${previewUrl}`);
+        console.log(`👆 Click this link to view the verification email in your browser\n`);
+      }
       
       return this.createResult(
         true,

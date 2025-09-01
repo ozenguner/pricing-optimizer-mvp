@@ -3,7 +3,7 @@ import { BaseEmailProvider } from './BaseEmailProvider.js';
 import { EmailMessage, EmailResult, SendGridConfig, EmailAddress } from '../../../types/email.js';
 
 export class SendGridProvider extends BaseEmailProvider {
-  private config: SendGridConfig;
+  protected config: SendGridConfig;
 
   constructor(config: SendGridConfig) {
     super(config);

@@ -13,8 +13,8 @@ const router = Router()
 // Validation middleware
 const calculateValidation = [
   body('rateCardId').isUUID().withMessage('Invalid rate card ID'),
-  body('quantity').isNumeric().isFloat({ gt: 0 }).withMessage('Quantity must be a positive number'),
-  body('baseCost').optional().isNumeric().isFloat({ gte: 0 }).withMessage('Base cost must be a non-negative number'),
+  body('quantity').isNumeric().isFloat({ min: 0.01 }).withMessage('Quantity must be a positive number'),
+  body('baseCost').optional().isNumeric().isFloat({ min: 0 }).withMessage('Base cost must be a non-negative number'),
   body('billingPeriod').optional().isIn(['monthly', 'yearly']).withMessage('Billing period must be monthly or yearly'),
   body('parameters').optional().isObject().withMessage('Parameters must be an object')
 ]
@@ -22,8 +22,8 @@ const calculateValidation = [
 const bulkCalculateValidation = [
   body('calculations').isArray({ min: 1, max: 50 }).withMessage('Calculations must be an array with 1-50 items'),
   body('calculations.*.rateCardId').isUUID().withMessage('Invalid rate card ID'),
-  body('calculations.*.quantity').isNumeric().isFloat({ gt: 0 }).withMessage('Quantity must be a positive number'),
-  body('calculations.*.baseCost').optional().isNumeric().isFloat({ gte: 0 }).withMessage('Base cost must be a non-negative number'),
+  body('calculations.*.quantity').isNumeric().isFloat({ min: 0.01 }).withMessage('Quantity must be a positive number'),
+  body('calculations.*.baseCost').optional().isNumeric().isFloat({ min: 0 }).withMessage('Base cost must be a non-negative number'),
   body('calculations.*.billingPeriod').optional().isIn(['monthly', 'yearly']).withMessage('Billing period must be monthly or yearly'),
   body('calculations.*.parameters').optional().isObject().withMessage('Parameters must be an object'),
   body('calculations.*.label').optional().isString().isLength({ max: 100 }).withMessage('Label must be a string with max 100 characters')
@@ -31,8 +31,8 @@ const bulkCalculateValidation = [
 
 const publicCalculateValidation = [
   param('shareToken').isUUID().withMessage('Invalid share token'),
-  body('quantity').isNumeric().isFloat({ gt: 0 }).withMessage('Quantity must be a positive number'),
-  body('baseCost').optional().isNumeric().isFloat({ gte: 0 }).withMessage('Base cost must be a non-negative number'),
+  body('quantity').isNumeric().isFloat({ min: 0.01 }).withMessage('Quantity must be a positive number'),
+  body('baseCost').optional().isNumeric().isFloat({ min: 0 }).withMessage('Base cost must be a non-negative number'),
   body('billingPeriod').optional().isIn(['monthly', 'yearly']).withMessage('Billing period must be monthly or yearly'),
   body('parameters').optional().isObject().withMessage('Parameters must be an object')
 ]

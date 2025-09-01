@@ -1,18 +1,22 @@
 export interface User {
   id: string
   email: string
-  password: string
+  password?: string
   name: string
+  verified?: boolean
+  verifiedAt?: string
   createdAt: string
   updatedAt: string
-  folders: Folder[]
-  rateCards: RateCard[]
+  folders?: Folder[]
+  rateCards?: RateCard[]
 }
 
 export interface AuthResponse {
   message: string
-  user: User
-  token: string
+  user?: User
+  token?: string
+  requiresVerification?: boolean
+  verificationEmailSent?: boolean
 }
 
 export interface Folder {
@@ -26,6 +30,32 @@ export interface Folder {
   parent?: Folder
   children: Folder[]
   rateCards: RateCard[]
+}
+
+export interface Account {
+  id: string
+  name: string
+  createdAt: string
+  productSuites?: ProductSuite[]
+}
+
+export interface ProductSuite {
+  id: string
+  name: string
+  accountId: string
+  account?: Account
+  skus?: SKU[]
+  createdAt: string
+}
+
+export interface SKU {
+  id: string
+  code: string
+  name: string
+  productSuiteId: string
+  productSuite?: ProductSuite
+  rateCards?: RateCard[]
+  createdAt: string
 }
 
 export type SharingType = 'internal' | 'external'
@@ -46,20 +76,34 @@ export interface RateCard {
   id: string
   name: string
   description?: string
+  currency: Currency
+  ownerTeam: OwnerTeam
   pricingModel: PricingModel
   data: PricingData
   isActive: boolean
   shareToken?: string
   sharingPermissions: SharingPermissions
+  skuId?: string
   folderId?: string
-  userId: string
+  userId?: string
   createdAt: string
   updatedAt: string
-  user: User
+  sku?: SKU
+  user?: User
   folder?: Folder
 }
 
 export type PricingModel = 'tiered' | 'seat-based' | 'flat-rate' | 'cost-plus' | 'subscription'
+export type Currency = 'USD' | 'CAD' | 'EUR' | 'GBP' | 'JPY'
+export type OwnerTeam = 'Marketing' | 'Sales' | 'Pricing' | 'Finance'
+
+export const CurrencySymbols: Record<Currency, string> = {
+  'USD': '$',
+  'CAD': 'C$',
+  'EUR': '€', 
+  'GBP': '£',
+  'JPY': '¥'
+}
 
 // Different data structures for each pricing model
 export interface TieredPricing {
@@ -67,31 +111,37 @@ export interface TieredPricing {
     min: number
     max: number | null
     pricePerUnit: number
+    costPerUnit?: number
   }>
 }
 
 export interface SeatBasedPricing {
-  pricePerSeat: number
-  minimumSeats?: number
-  volumeDiscounts?: Array<{
-    minSeats: number
-    discountPercent: number
+  lineItems: Array<{
+    name: string
+    pricePerSeat: number
+    costPerSeat?: number
   }>
+  minimumSeats?: number
 }
 
 export interface FlatRatePricing {
   price: number
+  cost?: number
   billingPeriod?: 'one-time' | 'monthly' | 'yearly'
 }
 
 export interface CostPlusPricing {
   baseCost: number
+  costPerUnit?: number
   markupPercent: number
+  units: string
 }
 
 export interface SubscriptionPricing {
-  monthlyPrice: number
-  yearlyPrice?: number
+  termType: 'days' | 'months' | 'quarters' | 'years'
+  pricePerTerm: number
+  costPerTerm?: number
+  numberOfTerms: number
   setupFee?: number
   features?: string[]
 }

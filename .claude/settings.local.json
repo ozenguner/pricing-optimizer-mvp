@@ -22,7 +22,19 @@
       "Bash(if exist dev.db echo Database exists)",
       "Bash(npm run:*)",
       "Bash(grep:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(sqlite3:*)",
+      "Bash(npm start)",
+      "Bash(cmd.exe:*)",
+      "Bash(PORT=5006 npm run dev)",
+      "Bash(/bashes)",
+      "Bash(tasklist:*)",
+      "Bash(if exist prismadev.db echo Database exists)",
+      "Bash(dir prismadev.db)",
+      "Bash(PORT=5001 timeout 10 npm run dev)",
+      "Bash(npx tsc:*)",
+      "Bash(PORT=3000 npm run dev)",
+      "Bash(PORT=5007 npm run dev)"
     ],
     "deny": [],
     "ask": []

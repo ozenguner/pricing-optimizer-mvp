@@ -1,22 +1,30 @@
 import { api } from './api'
-import type { RateCard, PricingModel, PricingData } from '../types'
+import type { RateCard, PricingModel, PricingData, Currency, OwnerTeam, SharingPermissions } from '../types'
 
 export interface CreateRateCardRequest {
   name: string
   description?: string
+  currency?: Currency
+  ownerTeam?: OwnerTeam
   pricingModel: PricingModel
   data: PricingData
   isActive?: boolean
+  skuId?: string
   folderId?: string
+  sharingPermissions?: SharingPermissions
 }
 
 export interface UpdateRateCardRequest {
   name?: string
   description?: string
+  currency?: Currency
+  ownerTeam?: OwnerTeam
   pricingModel?: PricingModel
   data?: PricingData
   isActive?: boolean
+  skuId?: string
   folderId?: string
+  sharingPermissions?: SharingPermissions
 }
 
 export interface RateCardResponse {

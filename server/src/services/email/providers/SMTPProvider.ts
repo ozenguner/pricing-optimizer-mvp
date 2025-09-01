@@ -3,7 +3,7 @@ import { BaseEmailProvider } from './BaseEmailProvider.js';
 import { EmailMessage, EmailResult, SMTPConfig, EmailAddress } from '../../../types/email.js';
 
 export class SMTPProvider extends BaseEmailProvider {
-  private config: SMTPConfig;
+  protected config: SMTPConfig;
   private transporter: nodemailer.Transporter | null = null;
 
   constructor(config: SMTPConfig) {
@@ -24,7 +24,7 @@ export class SMTPProvider extends BaseEmailProvider {
   }
 
   private createTransporter(): void {
-    this.transporter = nodemailer.createTransporter({
+    this.transporter = nodemailer.createTransport({
       host: this.config.host,
       port: this.config.port,
       secure: this.config.secure,

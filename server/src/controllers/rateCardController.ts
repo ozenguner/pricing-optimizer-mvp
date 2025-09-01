@@ -11,10 +11,31 @@ export const createRateCard = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ errors: errors.array() })
     }
 
-    const { name, description, pricingModel, data, isActive = true, folderId } = req.body
+    const { 
+      name, 
+      description, 
+      currency = 'USD', 
+      ownerTeam = 'Pricing', 
+      pricingModel, 
+      data, 
+      isActive = true, 
+      skuId, 
+      folderId,
+      calculationData
+    } = req.body
     const userId = req.user!.id
 
-    // Validate that folder belongs to user if folderId is provided
+    // Validate SKU exists if skuId is provided (new hierarchical structure)
+    if (skuId) {
+      const sku = await prisma.sKU.findUnique({
+        where: { id: skuId }
+      })
+      if (!sku) {
+        return res.status(400).json({ error: 'Invalid SKU' })
+      }
+    }
+
+    // Validate that folder belongs to user if folderId is provided (backward compatibility)
     if (folderId) {
       const folder = await prisma.folder.findFirst({
         where: { id: folderId, userId }
@@ -28,13 +49,30 @@ export const createRateCard = async (req: AuthRequest, res: Response) => {
       data: {
         name,
         description,
+        currency,
+        ownerTeam,
         pricingModel,
         data: JSON.stringify(data),
         isActive,
+        skuId,
         folderId,
-        userId
+        userId: skuId ? null : userId, // Only set userId if not using hierarchical structure
+        calculationData: calculationData ? JSON.stringify(calculationData) : null,
+        isCalculationComplete: calculationData?.isComplete || false,
+        calculatedTotalPrice: calculationData?.totalPrice || null,
+        priceValidFrom: calculationData?.validFrom ? new Date(calculationData.validFrom) : null,
+        priceValidUntil: calculationData?.validUntil ? new Date(calculationData.validUntil) : null,
       },
       include: {
+        sku: {
+          include: {
+            productSuite: {
+              include: {
+                account: true
+              }
+            }
+          }
+        },
         user: {
           select: { id: true, email: true, name: true }
         },
@@ -47,7 +85,8 @@ export const createRateCard = async (req: AuthRequest, res: Response) => {
     // Parse data back to JSON for response
     const responseRateCard = {
       ...rateCard,
-      data: JSON.parse(rateCard.data)
+      data: JSON.parse(rateCard.data),
+      calculationData: rateCard.calculationData ? JSON.parse(rateCard.calculationData) : null
     }
 
     res.status(201).json({
@@ -63,11 +102,23 @@ export const createRateCard = async (req: AuthRequest, res: Response) => {
 export const getRateCards = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id
-    const { folderId, page = '1', limit = '20', search, pricingModel, isActive } = req.query
+    const { folderId, skuId, ownerTeam, page = '1', limit = '20', search, pricingModel, isActive } = req.query
 
-    const where: any = { userId }
+    const where: any = {
+      OR: [
+        { userId }, // Legacy rate cards
+        { sku: { isNot: null } } // Hierarchical rate cards
+      ]
+    }
+    
     if (folderId) {
       where.folderId = folderId as string
+    }
+    if (skuId) {
+      where.skuId = skuId as string
+    }
+    if (ownerTeam) {
+      where.ownerTeam = ownerTeam as string
     }
     if (search) {
       where.OR = [
@@ -107,7 +158,8 @@ export const getRateCards = async (req: AuthRequest, res: Response) => {
     // Parse data for all rate cards
     const responseRateCards = rateCards.map(rateCard => ({
       ...rateCard,
-      data: JSON.parse(rateCard.data)
+      data: JSON.parse(rateCard.data),
+      calculationData: rateCard.calculationData ? JSON.parse(rateCard.calculationData) : null
     }))
 
     res.json({ 
@@ -131,8 +183,23 @@ export const getRateCard = async (req: AuthRequest, res: Response) => {
     const userId = req.user!.id
 
     const rateCard = await prisma.rateCard.findFirst({
-      where: { id, userId },
+      where: { 
+        id,
+        OR: [
+          { userId }, // Legacy rate cards
+          { sku: { isNot: null } } // Hierarchical rate cards (accessible to all authenticated users)
+        ]
+      },
       include: {
+        sku: {
+          include: {
+            productSuite: {
+              include: {
+                account: true
+              }
+            }
+          }
+        },
         user: {
           select: { id: true, email: true, name: true }
         },
@@ -149,7 +216,8 @@ export const getRateCard = async (req: AuthRequest, res: Response) => {
     // Parse data back to JSON for response
     const responseRateCard = {
       ...rateCard,
-      data: JSON.parse(rateCard.data)
+      data: JSON.parse(rateCard.data),
+      calculationData: rateCard.calculationData ? JSON.parse(rateCard.calculationData) : null
     }
 
     res.json({ rateCard: responseRateCard })
@@ -167,7 +235,7 @@ export const updateRateCard = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params
-    const { name, description, pricingModel, data, isActive, folderId } = req.body
+    const { name, description, currency, ownerTeam, pricingModel, data, isActive, skuId, folderId, calculationData } = req.body
     const userId = req.user!.id
 
     // Check if rate card exists and belongs to user
@@ -192,15 +260,34 @@ export const updateRateCard = async (req: AuthRequest, res: Response) => {
     const updateData: any = {}
     if (name !== undefined) updateData.name = name
     if (description !== undefined) updateData.description = description
+    if (currency !== undefined) updateData.currency = currency
+    if (ownerTeam !== undefined) updateData.ownerTeam = ownerTeam
     if (pricingModel !== undefined) updateData.pricingModel = pricingModel
     if (data !== undefined) updateData.data = JSON.stringify(data)
     if (isActive !== undefined) updateData.isActive = isActive
+    if (skuId !== undefined) updateData.skuId = skuId
     if (folderId !== undefined) updateData.folderId = folderId
+    if (calculationData !== undefined) {
+      updateData.calculationData = calculationData ? JSON.stringify(calculationData) : null
+      updateData.isCalculationComplete = calculationData?.isComplete || false
+      updateData.calculatedTotalPrice = calculationData?.totalPrice || null
+      updateData.priceValidFrom = calculationData?.validFrom ? new Date(calculationData.validFrom) : null
+      updateData.priceValidUntil = calculationData?.validUntil ? new Date(calculationData.validUntil) : null
+    }
 
     const rateCard = await prisma.rateCard.update({
       where: { id },
       data: updateData,
       include: {
+        sku: {
+          include: {
+            productSuite: {
+              include: {
+                account: true
+              }
+            }
+          }
+        },
         user: {
           select: { id: true, email: true, name: true }
         },
@@ -213,7 +300,8 @@ export const updateRateCard = async (req: AuthRequest, res: Response) => {
     // Parse data back to JSON for response
     const responseRateCard = {
       ...rateCard,
-      data: JSON.parse(rateCard.data)
+      data: JSON.parse(rateCard.data),
+      calculationData: rateCard.calculationData ? JSON.parse(rateCard.calculationData) : null
     }
 
     res.json({
@@ -283,13 +371,25 @@ export const duplicateRateCard = async (req: AuthRequest, res: Response) => {
       data: {
         name: duplicateName,
         description: originalRateCard.description,
+        currency: originalRateCard.currency,
+        ownerTeam: originalRateCard.ownerTeam,
         pricingModel: originalRateCard.pricingModel,
         data: originalRateCard.data,
         isActive: originalRateCard.isActive,
+        skuId: originalRateCard.skuId,
         folderId: folderId || originalRateCard.folderId,
-        userId
+        userId: originalRateCard.skuId ? null : userId
       },
       include: {
+        sku: {
+          include: {
+            productSuite: {
+              include: {
+                account: true
+              }
+            }
+          }
+        },
         user: {
           select: { id: true, email: true, name: true }
         },
@@ -302,7 +402,8 @@ export const duplicateRateCard = async (req: AuthRequest, res: Response) => {
     // Parse data back to JSON for response
     const responseDuplicateRateCard = {
       ...duplicateRateCard,
-      data: JSON.parse(duplicateRateCard.data)
+      data: JSON.parse(duplicateRateCard.data),
+      calculationData: duplicateRateCard.calculationData ? JSON.parse(duplicateRateCard.calculationData) : null
     }
 
     res.status(201).json({
@@ -335,6 +436,15 @@ export const generateShareToken = async (req: AuthRequest, res: Response) => {
       where: { id },
       data: { shareToken },
       include: {
+        sku: {
+          include: {
+            productSuite: {
+              include: {
+                account: true
+              }
+            }
+          }
+        },
         user: {
           select: { id: true, email: true, name: true }
         },
@@ -347,7 +457,8 @@ export const generateShareToken = async (req: AuthRequest, res: Response) => {
     // Parse data back to JSON for response
     const responseRateCard = {
       ...rateCard,
-      data: JSON.parse(rateCard.data)
+      data: JSON.parse(rateCard.data),
+      calculationData: rateCard.calculationData ? JSON.parse(rateCard.calculationData) : null
     }
 
     res.json({
@@ -379,6 +490,15 @@ export const revokeShareToken = async (req: AuthRequest, res: Response) => {
       where: { id },
       data: { shareToken: null },
       include: {
+        sku: {
+          include: {
+            productSuite: {
+              include: {
+                account: true
+              }
+            }
+          }
+        },
         user: {
           select: { id: true, email: true, name: true }
         },
@@ -391,7 +511,8 @@ export const revokeShareToken = async (req: AuthRequest, res: Response) => {
     // Parse data back to JSON for response
     const responseRateCard = {
       ...rateCard,
-      data: JSON.parse(rateCard.data)
+      data: JSON.parse(rateCard.data),
+      calculationData: rateCard.calculationData ? JSON.parse(rateCard.calculationData) : null
     }
 
     res.json({
@@ -428,6 +549,11 @@ export const getPublicRateCard = async (req: Request, res: Response) => {
       description: rateCard.description,
       pricingModel: rateCard.pricingModel,
       data: JSON.parse(rateCard.data),
+      calculationData: rateCard.calculationData ? JSON.parse(rateCard.calculationData) : null,
+      isCalculationComplete: rateCard.isCalculationComplete,
+      calculatedTotalPrice: rateCard.calculatedTotalPrice,
+      priceValidFrom: rateCard.priceValidFrom,
+      priceValidUntil: rateCard.priceValidUntil,
       createdAt: rateCard.createdAt,
       updatedAt: rateCard.updatedAt,
       user: rateCard.user

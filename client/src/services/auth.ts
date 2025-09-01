@@ -25,10 +25,13 @@ export const authService = {
 
   async register(credentials: RegisterCredentials): Promise<AuthResponse> {
     const response = await api.post<AuthResponse>('/auth/register', credentials)
-    const { token, user } = response.data
     
-    localStorage.setItem('token', token)
-    localStorage.setItem('user', JSON.stringify(user))
+    // Only store auth data if verification is not required
+    if (!response.data.requiresVerification && response.data.token) {
+      const { token, user } = response.data
+      localStorage.setItem('token', token)
+      localStorage.setItem('user', JSON.stringify(user))
+    }
     
     return response.data
   },
@@ -54,5 +57,27 @@ export const authService = {
 
   isAuthenticated(): boolean {
     return !!this.getStoredToken()
+  },
+
+  async verifyEmail(token: string): Promise<{ message: string; user: any }> {
+    const response = await api.post('/email-verification/verify', { token })
+    const { user } = response.data
+    
+    if (user) {
+      // Store user data after successful verification
+      localStorage.setItem('user', JSON.stringify(user))
+    }
+    
+    return response.data
+  },
+
+  async resendVerificationEmail(email: string): Promise<{ message: string }> {
+    const response = await api.post('/email-verification/resend', { email })
+    return response.data
+  },
+
+  async checkVerificationStatus(email: string): Promise<{ verified: boolean; verifiedAt?: string }> {
+    const response = await api.get(`/email-verification/status?email=${encodeURIComponent(email)}`)
+    return response.data
   }
 }

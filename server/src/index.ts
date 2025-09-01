@@ -6,14 +6,16 @@ import dotenv from 'dotenv'
 import { PrismaClient } from '@prisma/client'
 
 import authRoutes from './routes/auth.js'
+import emailVerificationRoutes from './routes/emailVerification.js'
 import rateCardRoutes from './routes/rateCards.js'
+import hierarchyRoutes from './routes/hierarchy.js'
 import calculatorRoutes from './routes/calculator.js'
 import folderRoutes from './routes/folders.js'
 import importExportRoutes from './routes/importExport.js'
 import publicRoutes from './routes/public.js'
 import dashboardRoutes from './routes/dashboard.js'
 import { errorHandler } from './middleware/errorHandler.js'
-import { authenticateToken } from './middleware/auth.js'
+import { authenticateToken, requireEmailVerification } from './middleware/auth.js'
 import { rateLimitLogger } from './middleware/securityLogger.js'
 
 dotenv.config()
@@ -102,7 +104,9 @@ app.get('/health', (req, res) => {
 
 // Apply strict rate limiting to authentication endpoints
 app.use('/api/auth', authLimiter, authRoutes)
+app.use('/api/email-verification', authLimiter, emailVerificationRoutes)
 app.use('/api/rate-cards', authenticateToken, rateCardRoutes)
+app.use('/api/hierarchy', authenticateToken, hierarchyRoutes)
 app.use('/api/folders', authenticateToken, folderRoutes)
 // Apply moderate rate limiting to sensitive operations
 app.use('/api/import', authenticateToken, sensitiveOperationsLimiter, importExportRoutes)

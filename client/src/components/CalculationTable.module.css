@@ -1,0 +1,267 @@
+/* Table styling requirements */
+.calculation-table {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 14px;
+}
+
+.cell-input {
+  font-family: inherit;
+  background: transparent;
+  border: 2px solid transparent;
+  padding: 8px;
+  width: 100%;
+  min-height: 20px;
+}
+
+.cell-input:focus {
+  background: white;
+  border-color: #3B82F6;
+  outline: none;
+}
+
+.cell-error {
+  background-color: #FEE2E2;
+  border-color: #EF4444;
+}
+
+.formula-cell {
+  background-color: #F3F4F6;
+  color: #1F2937;
+}
+
+/* Additional styling for better UX */
+.table-container {
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.table-header {
+  background-color: #F9FAFB;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.table-cell {
+  border-right: 1px solid #E5E7EB;
+  padding: 0;
+  position: relative;
+  vertical-align: top;
+}
+
+.table-cell:last-child {
+  border-right: none;
+}
+
+.table-row {
+  border-bottom: 1px solid #F3F4F6;
+}
+
+.table-row:hover {
+  background-color: #F9FAFB;
+}
+
+.table-row:last-child {
+  border-bottom: none;
+}
+
+.readonly-cell {
+  background-color: #F9FAFB;
+  color: #6B7280;
+  font-weight: 500;
+  padding: 8px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.cell-wrapper {
+  position: relative;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+
+.cell-display {
+  padding: 8px;
+  min-height: 20px;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.cell-display:hover {
+  background-color: #F3F4F6;
+}
+
+.cell-error-message {
+  color: #DC2626;
+  font-size: 11px;
+  margin-top: 2px;
+  padding: 0 8px;
+  line-height: 1.2;
+}
+
+.total-row {
+  background-color: #EFF6FF;
+  border-top: 2px solid #3B82F6;
+  font-weight: 600;
+}
+
+.total-row .table-cell {
+  background-color: inherit;
+}
+
+.row-number {
+  background-color: #F9FAFB;
+  border-right: 1px solid #E5E7EB;
+  color: #6B7280;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  padding: 8px;
+  min-width: 40px;
+}
+
+.actions-cell {
+  text-align: center;
+  padding: 8px;
+  min-width: 80px;
+}
+
+.action-button {
+  color: #9CA3AF;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.action-button:hover {
+  color: #6B7280;
+}
+
+.delete-button:hover {
+  color: #DC2626;
+}
+
+.duplicate-button:hover {
+  color: #3B82F6;
+}
+
+/* Drag and drop styling */
+.dragging {
+  opacity: 0.5;
+}
+
+.drag-over {
+  background-color: #EFF6FF;
+  border-top: 2px solid #3B82F6;
+}
+
+/* Formula help styling */
+.formula-help {
+  background-color: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  color: #6B7280;
+  line-height: 1.4;
+}
+
+.formula-help strong {
+  color: #374151;
+}
+
+/* Controls styling */
+.table-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 0 4px;
+}
+
+.controls-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.add-row-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background-color: #3B82F6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.add-row-button:hover {
+  background-color: #2563EB;
+}
+
+.history-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.history-button {
+  padding: 6px 12px;
+  color: #6B7280;
+  background: none;
+  border: 1px solid #E5E7EB;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.history-button:hover:not(:disabled) {
+  color: #374151;
+  background-color: #F9FAFB;
+}
+
+.history-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.total-display {
+  font-weight: 600;
+  color: #1F2937;
+  font-size: 16px;
+}
+
+/* Required field indicator */
+.required-indicator {
+  color: #DC2626;
+  margin-left: 4px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .calculation-table {
+    font-size: 12px;
+  }
+  
+  .cell-input {
+    padding: 6px;
+  }
+  
+  .cell-display {
+    padding: 6px;
+  }
+  
+  .readonly-cell {
+    padding: 6px;
+    min-height: 32px;
+  }
+}

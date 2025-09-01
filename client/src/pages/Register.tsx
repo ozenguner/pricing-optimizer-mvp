@@ -43,7 +43,8 @@ export function Register() {
       const result = await authService.register(registerData)
       
       console.log('Registration successful!', result)
-      alert('Registration successful! Redirecting to dashboard...')
+      
+      // Email verification disabled - redirect directly to dashboard
       navigate('/')
     } catch (err: any) {
       console.error('Registration error:', err)

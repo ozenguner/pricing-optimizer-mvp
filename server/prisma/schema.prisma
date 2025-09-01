@@ -53,21 +53,59 @@ model Folder {
   @@index([userId, createdAt])
 }
 
+model Account {
+  id            String         @id @default(uuid())
+  name          String
+  createdAt     DateTime       @default(now())
+  productSuites ProductSuite[]
+}
+
+model ProductSuite {
+  id        String   @id @default(uuid())
+  name      String
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id])
+  skus      SKU[]
+  createdAt DateTime @default(now())
+}
+
+model SKU {
+  id             String       @id @default(uuid())
+  code           String       @unique
+  name           String
+  productSuiteId String
+  productSuite   ProductSuite @relation(fields: [productSuiteId], references: [id])
+  rateCards      RateCard[]
+  createdAt      DateTime     @default(now())
+}
+
 model RateCard {
   id           String   @id @default(uuid())
   name         String
   description  String?
+  currency     String   @default("USD") // USD, EUR, GBP, CAD, JPY
+  ownerTeam    String   @default("Pricing") // Marketing, Sales, Pricing, Finance
   pricingModel String   // 'tiered' | 'seat-based' | 'flat-rate' | 'cost-plus' | 'subscription'
   data         String   // Flexible JSON for different pricing structures
   isActive     Boolean  @default(true)
   shareToken   String?  @unique // For external sharing
-  folderId     String?
-  userId       String
+  skuId        String?  // Optional for backward compatibility
+  folderId     String?  // Kept for backward compatibility
+  userId       String?  // Kept for backward compatibility, made optional
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   
-  user   User    @relation(fields: [userId], references: [id])
+  // New calculation fields
+  calculationData String?      // Stores the table data as JSON string
+  isCalculationComplete Boolean @default(false)
+  calculatedTotalPrice Float?
+  priceValidFrom DateTime?
+  priceValidUntil DateTime?
+  
+  sku    SKU?    @relation(fields: [skuId], references: [id])
+  user   User?   @relation(fields: [userId], references: [id])
   folder Folder? @relation(fields: [folderId], references: [id])
+  calculationAudits CalculationAudit[]
   
   // Performance indexes for rate card queries
   @@index([userId])
@@ -78,7 +116,11 @@ model RateCard {
   @@index([userId, updatedAt])
   @@index([userId, name])
   @@index([userId, pricingModel])
+  @@index([userId, currency])
   @@index([isActive, createdAt])
+  @@index([skuId])
+  @@index([ownerTeam])
+  @@index([isCalculationComplete])
 }
 
 model SecurityLog {
@@ -116,5 +158,21 @@ model VerificationToken {
   @@index([userId])
   @@index([type])
   @@index([expiresAt])
+}
+
+model CalculationAudit {
+  id         String @id @default(uuid())
+  rateCardId String
+  changeType String // 'cell_edit', 'row_add', 'row_delete', 'formula_change'
+  oldValue   String?  // JSON string
+  newValue   String   // JSON string
+  changedBy  String
+  changedAt  DateTime @default(now())
+  
+  rateCard RateCard @relation(fields: [rateCardId], references: [id])
+  
+  @@index([rateCardId])
+  @@index([changedAt])
+  @@index([changeType])
 }
 
