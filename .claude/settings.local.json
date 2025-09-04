@@ -34,7 +34,9 @@
       "Bash(PORT=5001 timeout 10 npm run dev)",
       "Bash(npx tsc:*)",
       "Bash(PORT=3000 npm run dev)",
-      "Bash(PORT=5007 npm run dev)"
+      "Bash(PORT=5007 npm run dev)",
+      "Bash(git clean:*)",
+      "Bash(PORT=8008 npm run dev)"
     ],
     "deny": [],
     "ask": []

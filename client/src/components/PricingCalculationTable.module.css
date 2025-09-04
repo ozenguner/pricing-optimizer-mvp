@@ -1,0 +1,61 @@
+/* Airtable-style colors and effects */
+.airtableTable {
+  --color-blue-25: #f8faff;
+  --color-gray-25: #fafbfc;
+  --color-border: #e1e5e9;
+  --color-header-bg: #f7f9fb;
+}
+
+/* Row hover effects */
+.tableRow:hover {
+  background-color: var(--color-blue-25) !important;
+}
+
+/* Header styling */
+.headerCell {
+  background-color: var(--color-header-bg);
+  border-color: var(--color-border);
+}
+
+.headerCell:hover {
+  background-color: #eef2f5;
+}
+
+/* Cell borders */
+.cell {
+  border-color: var(--color-border);
+}
+
+/* Alternating row colors */
+.evenRow {
+  background-color: white;
+}
+
+.oddRow {
+  background-color: var(--color-gray-25);
+}
+
+/* Editing state */
+.editingCell {
+  box-shadow: inset 0 0 0 2px #2d7ff9;
+  background-color: white !important;
+}
+
+/* Error state */
+.errorCell {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+}
+
+/* Edited state */
+.editedCell {
+  background-color: #eff6ff;
+}
+
+/* Focus ring for accessibility */
+.focusableCell:focus {
+  outline: 2px solid #2d7ff9;
+  outline-offset: -2px;
+  z-index: 10;
+  position: relative;
+}

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { CalculatorIcon } from '@heroicons/react/24/outline'
 import { useRateCardWizard } from '../../contexts/RateCardWizardContext'
 import { rateCardService } from '../../services/rateCards'
-import { CalculationTable } from '../../components/CalculationTable'
+import { PricingCalculationTable } from '../../components/PricingCalculationTable'
 import type { CalculationData } from '../../types/wizard'
 import { getColumnsForPricingModel, createEmptyRow } from '../../utils/calculationColumns'
 
@@ -113,11 +113,10 @@ const CalculationStep = ({ onCancel }: CalculationStepProps) => {
         </div>
 
         <div className="p-4">
-          <CalculationTable
-            pricingModel={state.pricingModel}
-            currency={state.currency}
+          <PricingCalculationTable
             data={calculationData}
-            onChange={handleTableChange}
+            onDataChange={handleTableChange}
+            currency={state.currency}
           />
         </div>
       </div>
